@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.0)
+set(pName Vonsai)
+project(${pName})
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Makefile and Ninja only
+
+# # ------------------------------------------------------------------------- #
+# # THIRD PARTY : ASSIMP
+# # ------------------------------------------------------------------------- #
+
+# # Disable assimp extras
+# set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+# set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+# set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+
+# # Disable assimp exports
+# set (ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
+
+# # Enable specific assimp imports
+# set (ASSIMP_BUILD_FBX_IMPORTER ON BOOL)
+# set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
+# set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+# set (ASSIMP_BUILD_SHARED_LIBS OFF BOOL)
+
+# add_subdirectory(vendor/assimp)
+
+# ------------------------------------------------------------------------- #
+# THIRD PARTY : OTHERS
+# ------------------------------------------------------------------------- #
+
+add_subdirectory(vendor/fmt)
+add_subdirectory(vendor/glm)
+add_subdirectory(vendor/glfw)
+
+# set(pLibs assimp fmt glm glfw)
+set(pLibs fmt glm glfw vulkan)
+
+# ------------------------------------------------------------------------- #
+# GLOBAL SETTINGS
+# ------------------------------------------------------------------------- #
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_CXX_FLAGS "")
+set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wweak-vtables -fexceptions")
+
+# ------------------------------------------------------------------------- #
+# PROJECT
+# ------------------------------------------------------------------------- #
+
+add_library(${pName} STATIC
+    ./src/App.cc
+)
+target_link_libraries(${pName} PRIVATE ${pLibs})
+target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor")
+
+# ------------------------------------------------------------------------- #
+# EXE and TESTING
+# ------------------------------------------------------------------------- #
+
+function(add_exe_and_test tName)
+
+    add_executable(${tName} test/${tName}.cc)
+    target_link_libraries(${tName} PRIVATE ${pLibs} ${pName})
+
+    add_test(COMMAND ${tName})
+endfunction()
+
+add_exe_and_test(Sandbox)
