@@ -1,5 +1,4 @@
 #include "App.hh"
-#include "VkToolbox.hh"
 
 #include <fmt/core.h>
 #include <algorithm>
@@ -56,10 +55,10 @@ void App::cleanup()
 
 void App::createInstance()
 {
-  if (vk0::LAYERS_ON && !checkValidationLayerSupport()) { vkErr_("Validation layers NOT available!"); }
+  if (vk0::LAYERS_ON && !checkValidationLayerSupport()) { vk0Say("Validation layers NOT available!"); }
 
-  auto constexpr kVer     = VK_API_VERSION_1_0;
-  auto constexpr kAppInfo = vk::ApplicationInfo { "Hello Triangle", kVer, "No Engine", kVer, kVer };
+  auto constexpr v       = VK_API_VERSION_1_0;
+  auto constexpr appInfo = vk::ApplicationInfo { "Hello Triangle", v, "No Engine", v, v };
 
   // . Window Extensions
   // auto         extensions   = getRequiredExtensions();
@@ -67,24 +66,24 @@ void App::createInstance()
   const char **glfwExts     = glfwGetRequiredInstanceExtensions(&glfwExtCount);
 
   // . Creating instance
-  auto constexpr kICLayers = nullptr;
-  auto const kICFlags      = vk::InstanceCreateFlags();
-  auto       kICInfo       = vk::InstanceCreateInfo { kICFlags, &kAppInfo, 0, kICLayers, glfwExtCount, glfwExts };
+  auto constexpr createLayers = nullptr;
+  auto const createFlags      = vk::InstanceCreateFlags();
+  auto       createInfo = vk::InstanceCreateInfo { createFlags, &appInfo, 0, createLayers, glfwExtCount, glfwExts };
   if (vk0::LAYERS_ON) {
-    kICInfo.enabledLayerCount   = static_cast<uint32_t>(vk0::LAYERS.size());
-    kICInfo.ppEnabledLayerNames = vk0::LAYERS.data();
+    createInfo.enabledLayerCount   = static_cast<uint32_t>(vk0::LAYERS.size());
+    createInfo.ppEnabledLayerNames = vk0::LAYERS.data();
   } else {
-    kICInfo.enabledLayerCount = 0;
+    createInfo.enabledLayerCount = 0;
   }
 
-  auto [err0, mainInstance] = vk::createInstanceUnique(kICInfo, nullptr);
-  vkErr(err0, "createInstanceUnique");
+  auto [err0, mainInstance] = vk::createInstanceUnique(createInfo, nullptr);
+  vk0Err(err0, "createInstanceUnique");
 
   mInstance = std::move(mainInstance);
 
   // . Getting extensions
   auto const [err1, extensions] = vk::enumerateInstanceExtensionProperties();
-  vkErr(err1, "enumerateInstanceExtensionProperties");
+  vk0Err(err1, "enumerateInstanceExtensionProperties");
 
   // . Show info about extensions
   fmt::print("Available extensions:\n");

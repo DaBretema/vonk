@@ -1,8 +1,10 @@
+
 # ------------------------------------------------------------------------- #
 # GLOBAL SETTINGS
 # ------------------------------------------------------------------------- #
 
 cmake_minimum_required(VERSION 3.0)
+set(CMAKE_MESSAGE_LOG_LEVEL "WARNING")
 
 set(pName Vonsai)
 project(${pName})
@@ -18,42 +20,41 @@ set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wweak-vtables -fexceptions")
 
 
-# # ------------------------------------------------------------------------- #
-# # THIRD PARTY
-# # ------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
+# THIRD PARTY
+# ------------------------------------------------------------------------- #
 
-# # Disable docs
-# set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-# set (GLFW_BUILD_DOCS OFF BOOL)
+# DOCS
 set (FMT_DOC "")
+set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 
-# # Disable assimp extras
+# VULKAN
+find_package(Vulkan REQUIRED)
 
-# set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-# set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-# set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+# ASSIMP
+## Static?
+set (ASSIMP_BUILD_SHARED_LIBS OFF BOOL)
+## Disable extras
+set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+## Disable importers/exporters
+set (ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
+set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+## Enable selected importers
+set (ASSIMP_BUILD_FBX_IMPORTER ON BOOL)
+set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
 
-# # Disable assimp exports
-# set (ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
-
-# # Enable specific assimp imports
-# set (ASSIMP_BUILD_FBX_IMPORTER ON BOOL)
-# set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
-# set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
-# set (ASSIMP_BUILD_SHARED_LIBS OFF BOOL)
-
-# add_subdirectory(vendor/assimp)
-
+# ADD FOLDERS
 add_subdirectory(vendor/fmt)
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/glfw)
-
-find_package(Vulkan REQUIRED)
-message("Vulkan package found: ${Vulkan_FOUND}")
+# add_subdirectory(vendor/assimp)
 
 set(pLibs fmt glm glfw ${Vulkan_LIBRARIES})
 set(pLibsIncl ${Vulkan_INCLUDE_DIRS})
+
 
 # ------------------------------------------------------------------------- #
 # PROJECT
@@ -69,12 +70,10 @@ target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLib
 # EXE and TESTING
 # ------------------------------------------------------------------------- #
 
-function(add_exe_and_test tName)
-
+function(addTest tName)
     add_executable(${tName} test/${tName}.cc)
     target_link_libraries(${tName} PRIVATE ${pLibs} ${pName})
-
     add_test(COMMAND ${tName})
 endfunction()
 
-add_exe_and_test(Sandbox)
+addTest(Sandbox)

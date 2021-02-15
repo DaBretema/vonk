@@ -1,9 +1,10 @@
 #pragma once
 
-#include <GLFW/glfw3.h>
 #include <algorithm>
-#define VULKAN_HPP_NO_EXCEPTIONS
-#include <vulkan/vulkan.hpp>
+#include <string>
+
+#include <GLFW/glfw3.h>
+#include "VkToolbox.hh"
 
 namespace Vonsai
 {
