@@ -22,7 +22,14 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wweak-vtables
 # # THIRD PARTY
 # # ------------------------------------------------------------------------- #
 
+# # Disable docs
+# set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+# set (GLFW_BUILD_DOCS OFF BOOL)
+set (FMT_DOC "")
+
 # # Disable assimp extras
+
 # set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 # set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 # set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
