@@ -7,22 +7,17 @@
 
 namespace Vonsai
 {
-//---------------------------------------------------------------------------
-
-template<typename T, typename V>
-bool isOn(T container, V val)
-{
-  return std::find(begin(container), end(container), val) != container.end();
-}
-
-//---------------------------------------------------------------------------
-
 class App
 {
 public:
+  App(int w, int h, const char *title) : mW(w), mH(h), mTitle(title) {}
   void run();
 
 private:
+  int         mW { 800 };
+  int         mH { 600 };
+  std::string mTitle { "Vonsai!" };
+
   vk::UniqueInstance mInstance;
   GLFWwindow *       mWindow { nullptr };
 

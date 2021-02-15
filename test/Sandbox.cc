@@ -2,6 +2,6 @@
 
 int main()
 {
-  Vonsai::App().run();
+  Vonsai::App(800, 600, "Hello Vulkan").run();
   return 0;
 }
