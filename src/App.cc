@@ -1,37 +1,68 @@
 #include "App.hh"
 
-#include <fmt/core.h>
+#include <tuple>
 #include <algorithm>
+#include <fmt/core.h>
+
+// void trace(std::string const &str) { fmt::print(str + "\n"); }
+// void trace(std::string const &str) { return; }
+#ifndef NDEBUG
+#  define VO_TRACE(s) fmt::print(s);
+#else
+#  define VO_TRACE(s)
+#endif
 
 namespace Vonsai
 {
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+//-----------------------------------------------------------------------------
 
 void App::run()
 {
+  VO_TRACE("> INIT WINDOW\n");
   initWindow();
+  VO_TRACE("> INIT VULKAN\n");
   initVulkan();
+  VO_TRACE("> MAIN LOOP\n");
   mainLoop();
+  VO_TRACE("> CLEAN UP\n");
   cleanup();
 }
 
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+//-----------------------------------------------------------------------------
 
 void App::initWindow()
 {
+  VO_TRACE(">> GLFW Init\n");
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Handling resized windows takes special care
+  glfwWindowHint(GLFW_RESIZABLE,
+                 GLFW_FALSE);  // Handling resized windows takes special care
+
+  VO_TRACE(">> GLFW Create Window\n");
   mWindow = glfwCreateWindow(mW, mH, mTitle.c_str(), nullptr, nullptr);
 }
 
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 
-void App::initVulkan() { createInstance(); }
+void App::initVulkan()
+{
+  VO_TRACE(">> Create Instance\n");
+  createInstance();
+}
 
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 
 void App::mainLoop()
 {
@@ -40,7 +71,7 @@ void App::mainLoop()
   }
 }
 
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
 
 void App::cleanup()
 {
@@ -50,48 +81,48 @@ void App::cleanup()
   glfwTerminate();
 }
 
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+//-----------------------------------------------------------------------------
 
 void App::createInstance()
 {
-  if (vk0::LAYERS_ON && !checkValidationLayerSupport()) { vk0Say("Validation layers NOT available!"); }
-
-  auto constexpr v       = VK_API_VERSION_1_0;
-  auto constexpr appInfo = vk::ApplicationInfo { "Hello Triangle", v, "No Engine", v, v };
-
-  // . Window Extensions
-  // auto         extensions   = getRequiredExtensions();
-  uint32_t     glfwExtCount = 0;
-  const char **glfwExts     = glfwGetRequiredInstanceExtensions(&glfwExtCount);
-
-  // . Creating instance
-  auto constexpr createLayers = nullptr;
-  auto const createFlags      = vk::InstanceCreateFlags();
-  auto       createInfo = vk::InstanceCreateInfo { createFlags, &appInfo, 0, createLayers, glfwExtCount, glfwExts };
-  if (vk0::LAYERS_ON) {
-    createInfo.enabledLayerCount   = static_cast<uint32_t>(vk0::LAYERS.size());
-    createInfo.ppEnabledLayerNames = vk0::LAYERS.data();
-  } else {
-    createInfo.enabledLayerCount = 0;
+  if (vk0::LAYERS_ON && !checkValidationLayerSupport()) {
+    VO_TRACE(">>> Checking validation layers\n");
+    VK0_Alert("Validation layers NOT available!");
   }
 
-  auto [err0, mainInstance] = vk::createInstanceUnique(createInfo, nullptr);
-  vk0Err(err0, "createInstanceUnique");
+  auto constexpr v   = VK_API_VERSION_1_0;
+  auto const appInfo = vk::ApplicationInfo { mTitle.c_str(), v, "Vonsai", v, v };
 
-  mInstance = std::move(mainInstance);
+  // . Window Extensions
+  auto const exts = getRequiredExtensions();
+
+  // . Creating instance = (ic - InstanceCreate)
+  auto const icFlags = vk::InstanceCreateFlags();
+  auto const icInfo  = vk::InstanceCreateInfo { icFlags, &appInfo, VK0_SizeData(vk0::LAYERS), VK0_SizeData(exts) };
+
+  mInstance = VK0_Call(createInstanceUnique(icInfo, nullptr));
 
   // . Getting extensions
-  auto const [err1, extensions] = vk::enumerateInstanceExtensionProperties();
-  vk0Err(err1, "enumerateInstanceExtensionProperties");
+  auto const extensions = VK0_Call(enumerateInstanceExtensionProperties());
 
   // . Show info about extensions
-  fmt::print("Available extensions:\n");
-  for (auto const &ext : extensions) { fmt::print("\t{}\n", ext.extensionName); }
+  fmt::print("[*] Available Extensions\n");
+  for (auto const &ext : extensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
 }
 
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+//-----------------------------------------------------------------------------
 
 bool App::checkValidationLayerSupport()
 {
@@ -101,12 +132,50 @@ bool App::checkValidationLayerSupport()
     auto const found = std::any_of(availableLayers.begin(), availableLayers.end(), [&](auto const layer) {
       return std::string_view(layerName) == layer.layerName;
     });
-    if (!found) return false;
+
+    if (!found) {
+      VK0_Alert_Fmt("Layer {} not found.", layerName);
+      return false;
+    }
   }
 
   return true;
 }
 
-//---------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+
+std::vector<const char *> App::getRequiredExtensions()
+{
+  uint32_t     glfwExtensionCount = 0;
+  const char **glfwExtensions;
+  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+  std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+  if (vk0::LAYERS_ON) { extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+
+  return extensions;
+}
+
+// std::tuple<uint32_t, const char **> App::getRequiredExtensions()
+// {
+//   uint32_t     glfwExtensionsCount = 0;
+//   const char **glfwExtensions      = glfwGetRequiredInstanceExtensions(&glfwExtensionsCount);
+
+//   fmt::print(">>>>>>>>>>>>>>>>>>>> no issues here");
+//   std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionsCount);
+
+//   if (vk0::LAYERS_ON) { extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+
+//   return { extensions.size(), extensions.data() };  //? Whats wrong??
+// }
+
+//-----------------------------------------------------------------------------
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+//-----------------------------------------------------------------------------
 
 }  // namespace Vonsai

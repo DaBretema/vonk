@@ -22,14 +22,19 @@ private:
   vk::UniqueInstance mInstance;
   GLFWwindow *       mWindow { nullptr };
 
+  // App flow
   void initWindow();
   void initVulkan();
   void mainLoop();
   void cleanup();
 
+  // To init vulkan...
   void createInstance();
 
-  bool checkValidationLayerSupport();
+  // Get vulkan data (layers, extensions, ...)
+  bool                      checkValidationLayerSupport();
+  std::vector<const char *> getRequiredExtensions();
+  // std::tuple<uint32_t, const char **> getRequiredExtensions();
 };
 
 }  // namespace Vonsai
