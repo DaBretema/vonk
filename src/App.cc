@@ -4,8 +4,6 @@
 #include <algorithm>
 #include <fmt/core.h>
 
-// void trace(std::string const &str) { fmt::print(str + "\n"); }
-// void trace(std::string const &str) { return; }
 #ifndef NDEBUG
 #  define VO_TRACE(s) fmt::print(s);
 #else
@@ -60,6 +58,16 @@ void App::initVulkan()
 {
   VO_TRACE(">> Create Instance\n");
   createInstance();
+
+  VO_TRACE(">> Setup Debug callback\n");
+  if (!vk0::LAYERS_ON) return;
+  // NOTE: Vulkan-hpp has methods for this, but they trigger linking errors...
+  // instance->createDebugUtilsMessengerEXT(createInfo);
+  // instance->createDebugUtilsMessengerEXTUnique(createInfo);
+  auto const createInfo  = vk0::defaultDebugUtilsMessengerCreateInfo();
+  auto const pCreateInfo = reinterpret_cast<const VkDebugUtilsMessengerCreateInfoEXT *>(&createInfo);
+  // NOTE: reinterpret_cast is also used by vulkan.hpp internally for all these structs
+  VK0_Test_Fn_C(vk0::CreateDebugUtilsMessengerEXT(*mInstance, pCreateInfo, nullptr, &mDebugMessenger));
 }
 
 //-----------------------------------------------------------------------------
@@ -75,6 +83,9 @@ void App::mainLoop()
 
 void App::cleanup()
 {
+  // NOTE: Comment line below to verify that VALIDATION LAYERS are working...
+  if (vk0::LAYERS_ON) { vk0::DestroyDebugUtilsMessengerEXT(*mInstance, mDebugMessenger, nullptr); }
+
   // NOTE: instance destruction is handled by UniqueInstance
 
   glfwDestroyWindow(mWindow);
@@ -134,7 +145,7 @@ bool App::checkValidationLayerSupport()
     });
 
     if (!found) {
-      VK0_Alert_Fmt("Layer {} not found.", layerName);
+      VK0_AlertFmt("Layer {} not found.", layerName);
       return false;
     }
   }

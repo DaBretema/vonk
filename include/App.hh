@@ -19,8 +19,10 @@ private:
   int         mH { 600 };
   std::string mTitle { "Vonsai!" };
 
-  vk::UniqueInstance mInstance;
-  GLFWwindow *       mWindow { nullptr };
+  vk::UniqueInstance       mInstance;
+  VkDebugUtilsMessengerEXT mDebugMessenger;  // FOLLOW HERE...
+
+  GLFWwindow *mWindow { nullptr };
 
   // App flow
   void initWindow();
