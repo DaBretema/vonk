@@ -1,34 +1,44 @@
 #include "App.hh"
 
+// #include <string>
 #include <tuple>
 #include <algorithm>
+
 #include <fmt/core.h>
+#include <fmt/format.h>
+
+#include "vk0/vk0Macros.hh"
+#include "vk0/vk0Settings.hh"
+#include "vk0/vk0Debug.hh"
 
 #ifndef NDEBUG
-#  define VO_TRACE(s) fmt::print(s);
+#  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg);
 #else
 #  define VO_TRACE(s)
 #endif
 
 namespace Vonsai
 {
+//
+
 //-----------------------------------------------------------------------------
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// ENTRY POINT
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 //-----------------------------------------------------------------------------
 
 void App::run()
 {
-  VO_TRACE("> INIT WINDOW\n");
+  VO_TRACE(1, "INIT WINDOW");
   initWindow();
-  VO_TRACE("> INIT VULKAN\n");
+  VO_TRACE(1, "INIT VULKAN");
   initVulkan();
-  VO_TRACE("> MAIN LOOP\n");
+  VO_TRACE(1, "MAIN LOOP");
   mainLoop();
-  VO_TRACE("> CLEAN UP\n");
+  VO_TRACE(1, "CLEAN UP");
   cleanup();
 }
 
@@ -36,19 +46,19 @@ void App::run()
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// TO RUN
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 //-----------------------------------------------------------------------------
 
 void App::initWindow()
 {
-  VO_TRACE(">> GLFW Init\n");
+  VO_TRACE(2, "GLFW Init");
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
-  glfwWindowHint(GLFW_RESIZABLE,
-                 GLFW_FALSE);  // Handling resized windows takes special care
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Resize windows takes special care
 
-  VO_TRACE(">> GLFW Create Window\n");
+  VO_TRACE(2, "GLFW Create Window");
   mWindow = glfwCreateWindow(mW, mH, mTitle.c_str(), nullptr, nullptr);
 }
 
@@ -56,18 +66,18 @@ void App::initWindow()
 
 void App::initVulkan()
 {
-  VO_TRACE(">> Create Instance\n");
+  VO_TRACE(2, "Create Instance");
   createInstance();
-
-  VO_TRACE(">> Setup Debug callback\n");
-  if (!vk0::LAYERS_ON) return;
-  // NOTE: Vulkan-hpp has methods for this, but they trigger linking errors...
-  // instance->createDebugUtilsMessengerEXT(createInfo);
-  // instance->createDebugUtilsMessengerEXTUnique(createInfo);
-  auto const createInfo  = vk0::defaultDebugUtilsMessengerCreateInfo();
-  auto const pCreateInfo = reinterpret_cast<const VkDebugUtilsMessengerCreateInfoEXT *>(&createInfo);
-  // NOTE: reinterpret_cast is also used by vulkan.hpp internally for all these structs
-  VK0_Test_Fn_C(vk0::CreateDebugUtilsMessengerEXT(*mInstance, pCreateInfo, nullptr, &mDebugMessenger));
+  VO_TRACE(2, "Setup Debug callback");
+  mDebugMessenger.create(*mInstance);
+  VO_TRACE(2, "Create Surface");
+  createSurface();
+  VO_TRACE(2, "Pick physical device");
+  pickPhysicalDevice();
+  VO_TRACE(2, "Create logical device");
+  createLogicalDevice();
+  VO_TRACE(2, "Create SWAP-CHAIN");
+  createSwapChain();
 }
 
 //-----------------------------------------------------------------------------
@@ -83,10 +93,16 @@ void App::mainLoop()
 
 void App::cleanup()
 {
-  // NOTE: Comment line below to verify that VALIDATION LAYERS are working...
-  if (vk0::LAYERS_ON) { vk0::DestroyDebugUtilsMessengerEXT(*mInstance, mDebugMessenger, nullptr); }
+  // NOTE: mInstance and mDevice destruction is handled by Unique..wrappers
 
-  // NOTE: instance destruction is handled by UniqueInstance
+  // not using UniqeSwapchain to destroy in correct order - before the surface
+  mLogicalDevice->destroySwapchainKHR(swapChain);
+
+  // NOTE: Surface is created by glfw, therefore not using a Unique handle
+  mInstance->destroySurfaceKHR(mSurface);
+
+  // NOTE: Comment line below to verify that VALIDATION LAYERS are working...
+  mDebugMessenger.destroy(*mInstance);
 
   glfwDestroyWindow(mWindow);
   glfwTerminate();
@@ -96,15 +112,16 @@ void App::cleanup()
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+// TO INIT VULKAN
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 //-----------------------------------------------------------------------------
 
 void App::createInstance()
 {
-  if (vk0::LAYERS_ON && !checkValidationLayerSupport()) {
-    VO_TRACE(">>> Checking validation layers\n");
-    VK0_Alert("Validation layers NOT available!");
+  if (vk0::hasLayers && !checkValidationLayerSupport()) {
+    VO_TRACE(3, "Checking validation layers");
+    vk0Alert("Validation layers NOT available!");
   }
 
   auto constexpr v   = VK_API_VERSION_1_0;
@@ -113,19 +130,79 @@ void App::createInstance()
   // . Window Extensions
   auto const exts = getRequiredExtensions();
 
-  // . Creating instance = (ic - InstanceCreate)
-  auto const icFlags = vk::InstanceCreateFlags();
-  auto const icInfo  = vk::InstanceCreateInfo { icFlags, &appInfo, VK0_SizeData(vk0::LAYERS), VK0_SizeData(exts) };
+  // . Creating instance
+  auto const flags = vk::InstanceCreateFlags();
+  auto const info  = vk::InstanceCreateInfo { flags, &appInfo, vk0SizeData(vk0::layers), vk0SizeData(exts) };
 
-  mInstance = VK0_Call(createInstanceUnique(icInfo, nullptr));
+  mInstance = vk0Call(vk::createInstanceUnique(info, nullptr));
 
+#if vk0Verbose
   // . Getting extensions
-  auto const extensions = VK0_Call(enumerateInstanceExtensionProperties());
-
+  auto const extensions = vk0Call(vk::enumerateInstanceExtensionProperties());
   // . Show info about extensions
-  fmt::print("[*] Available Extensions\n");
+  fmt::print("[*] Available INSTANCE Extensions\n");
   for (auto const &ext : extensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
+  for (auto const &ext : extensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
+#endif
 }
+
+//-----------------------------------------------------------------------------
+
+void App::createSurface()
+{
+  VkSurfaceKHR rawSurface;
+  vk0TestFnC(glfwCreateWindowSurface(*mInstance, mWindow, nullptr, &rawSurface));
+
+  mSurface = rawSurface;
+}
+
+//-----------------------------------------------------------------------------
+
+void App::pickPhysicalDevice()
+{
+  auto const devices = vk0Call(mInstance->enumeratePhysicalDevices());
+  if (devices.size() == 0) { vk0AlertAbort("Failed to find GPUs with Vulkan support!"); }
+
+  for (const auto &device : devices) {
+    auto const queueFamilyIndices = vk0::QueueFamilyIndices { device, mSurface };
+
+    if (queueFamilyIndices.isComplete()) {
+      mQueueFamilyIndices = queueFamilyIndices;
+      mPhysicalDevice     = device;
+      break;
+    }
+  }
+  if (!mPhysicalDevice) { vk0AlertAbort("Failed to find a suitable GPU"); }
+
+#if vk0VERBOSE
+  // . Getting extensions
+  auto const extensions = vk0Call(mPhysicalDevice.enumerateDeviceExtensionProperties());
+  // . Show info about extensions
+  fmt::print("[*] Available DEVICE Extensions [{}]\n", fmt::ptr(&mPhysicalDevice));
+  for (auto const &ext : extensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
+#endif
+}
+
+//-----------------------------------------------------------------------------
+
+void App::createLogicalDevice()
+{
+  auto const deviceFeatures   = vk::PhysicalDeviceFeatures();
+  auto const queuesCreateInfo = mQueueFamilyIndices.getCreateInfo();
+  auto const createInfo       = vk::DeviceCreateInfo { vk::DeviceCreateFlags(),
+                                                 vk0SizeData(queuesCreateInfo),
+                                                 vk0SizeData(vk0::layers),
+                                                 vk0SizeData(vk0::extensions),
+                                                 &deviceFeatures };
+
+  mLogicalDevice = vk0Call(mPhysicalDevice.createDeviceUnique(createInfo));
+  mQueueGraphics = mLogicalDevice->getQueue(mQueueFamilyIndices.graphicsFamily.value(), 0);
+  mQueuePresent  = mLogicalDevice->getQueue(mQueueFamilyIndices.presentFamily.value(), 0);
+}
+
+//-----------------------------------------------------------------------------
+
+void App::createSwapChain() {}
 
 //-----------------------------------------------------------------------------
 
@@ -139,13 +216,13 @@ bool App::checkValidationLayerSupport()
 {
   auto const availableLayers = vk::enumerateInstanceLayerProperties().value;
 
-  for (auto layerName : vk0::LAYERS) {
+  for (auto layerName : vk0::layers) {
     auto const found = std::any_of(availableLayers.begin(), availableLayers.end(), [&](auto const layer) {
       return std::string_view(layerName) == layer.layerName;
     });
 
     if (!found) {
-      VK0_AlertFmt("Layer {} not found.", layerName);
+      vk0AlertFmt("Layer {} not found.", layerName);
       return false;
     }
   }
@@ -163,23 +240,10 @@ std::vector<const char *> App::getRequiredExtensions()
 
   std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-  if (vk0::LAYERS_ON) { extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+  if (vk0::hasLayers) { extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
 
   return extensions;
 }
-
-// std::tuple<uint32_t, const char **> App::getRequiredExtensions()
-// {
-//   uint32_t     glfwExtensionsCount = 0;
-//   const char **glfwExtensions      = glfwGetRequiredInstanceExtensions(&glfwExtensionsCount);
-
-//   fmt::print(">>>>>>>>>>>>>>>>>>>> no issues here");
-//   std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionsCount);
-
-//   if (vk0::LAYERS_ON) { extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
-
-//   return { extensions.size(), extensions.data() };  //? Whats wrong??
-// }
 
 //-----------------------------------------------------------------------------
 
