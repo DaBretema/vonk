@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "vk0/vk0.hh"
@@ -11,24 +12,37 @@
 #define GLFW_EXPOSE_NATIVE_COCOA
 #include <GLFW/glfw3native.h>
 
-namespace Vonsai
+namespace vonsai
 {
-class App
+class app
 {
 public:
-  App(int w, int h, const char *title) : mW(w), mH(h), mTitle(title) {}
+  app(int w, int h, std::string title) : mW(w), mH(h), mTitle(std::move(title)) {}
   void run();
 
 private:
+
+
+  // App variables
   //---------------------------------------------------------------------------
 
   int mW { 800 };
   int mH { 600 };
-
-  std::string mTitle { "Vonsai!" };
+  std::string mTitle { "vonsai!" };
 
   GLFWwindow *mWindow { nullptr };
 
+
+  // App flow
+  //---------------------------------------------------------------------------
+
+  void initWindow();
+  void initVulkan();
+  void mainLoop();
+  void cleanup();
+
+
+  // Vulkan variables
   //---------------------------------------------------------------------------
 
   vk::UniqueInstance mInstance;
@@ -36,9 +50,9 @@ private:
   vk::PhysicalDevice mPhysicalDevice;
   vk::UniqueDevice   mLogicalDevice;
 
-  vk::Queue               mQueueGraphics;
-  vk::Queue               mQueuePresent;
-  vk0::QueueFamilyIndices mQueueFamilyIndices;
+  vk::Queue mQueueGraphics;
+  vk::Queue mQueuePresent;
+  vk0::QueueFamilyIndices    mQueueFamilyIndices;
 
   vk::SurfaceKHR   mSurface;
 
@@ -49,30 +63,16 @@ private:
 
   vk0::DebugMessenger mDebugMessenger;
 
+
+  // Vulkan initialization
   //---------------------------------------------------------------------------
 
-  // App flow
-  void initWindow();
-  void initVulkan();
-  void mainLoop();
-  void cleanup();
-
-  //---------------------------------------------------------------------------
-
-  // To init vulkan...
   void createInstance();
   void createSurface();
   void pickPhysicalDevice();
   void createLogicalDevice();
   void createSwapChain();
 
-  //---------------------------------------------------------------------------
-
-  // Get vulkan data (layers, extensions, ...)
-  bool                      checkValidationLayerSupport();
-  std::vector<const char *> getRequiredExtensions();
-
-  //---------------------------------------------------------------------------
 };
 
-}  // namespace Vonsai
+}  // namespace vonsai

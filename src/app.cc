@@ -1,36 +1,73 @@
-#include "App.hh"
+#include "app.hh"
 
 // #include <string>
 #include <tuple>
 #include <algorithm>
 
 #include <fmt/core.h>
-#include <fmt/format.h>
+//#include <fmt/format.h>
 
 #include "vk0/vk0Macros.hh"
 #include "vk0/vk0Settings.hh"
 #include "vk0/vk0Debug.hh"
 
 #ifndef NDEBUG
-#  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg);
+#  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg)
 #else
 #  define VO_TRACE(s)
 #endif
 
-namespace Vonsai
+
+//-----------------------------------------------------------------------------
+// === HELPERS
+//-----------------------------------------------------------------------------
+
+std::vector<const char *> sGetRequiredExtensions()
 {
-//
+  uint32_t     glfwExtensionCount = 0;
+  const char **glfwExtensions;
+  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+  std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+  if (vk0::hasLayers) { extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+
+  return extensions;
+}
 
 //-----------------------------------------------------------------------------
 
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// ENTRY POINT
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+bool sCheckValidationLayerSupport()
+{
+  auto const availableLayers = vk::enumerateInstanceLayerProperties().value;
+
+  for (auto layerName : vk0::layers) {
+    auto const found = std::any_of(availableLayers.begin(), availableLayers.end(), [&](auto const layer) {
+      return std::string_view(layerName) == layer.layerName;
+    });
+
+    if (!found) {
+      vk0AlertFmt("Layer {} not found.", layerName);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+//===============================================
+//===============================================
+//===============================================
+
+
+namespace vonsai
+{
 
 //-----------------------------------------------------------------------------
+// === ENTRY POINT
+//-----------------------------------------------------------------------------
 
-void App::run()
+void app::run()
 {
   VO_TRACE(1, "INIT WINDOW");
   initWindow();
@@ -42,16 +79,12 @@ void App::run()
   cleanup();
 }
 
-//-----------------------------------------------------------------------------
-
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// TO RUN
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 //-----------------------------------------------------------------------------
+// === TO RUN
+//-----------------------------------------------------------------------------
 
-void App::initWindow()
+void app::initWindow()
 {
   VO_TRACE(2, "GLFW Init");
   glfwInit();
@@ -64,7 +97,7 @@ void App::initWindow()
 
 //-----------------------------------------------------------------------------
 
-void App::initVulkan()
+void app::initVulkan()
 {
   VO_TRACE(2, "Create Instance");
   createInstance();
@@ -82,7 +115,7 @@ void App::initVulkan()
 
 //-----------------------------------------------------------------------------
 
-void App::mainLoop()
+void app::mainLoop()
 {
   while (!glfwWindowShouldClose(mWindow)) {
     glfwWaitEvents();  // glfwPollEvents();
@@ -91,7 +124,7 @@ void App::mainLoop()
 
 //-----------------------------------------------------------------------------
 
-void App::cleanup()
+void app::cleanup()
 {
   // NOTE: mInstance and mDevice destruction is handled by Unique..wrappers
 
@@ -108,27 +141,23 @@ void App::cleanup()
   glfwTerminate();
 }
 
-//-----------------------------------------------------------------------------
-
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-// TO INIT VULKAN
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 //-----------------------------------------------------------------------------
+// === TO INIT VULKAN
+//-----------------------------------------------------------------------------
 
-void App::createInstance()
+void app::createInstance()
 {
-  if (vk0::hasLayers && !checkValidationLayerSupport()) {
+  if (vk0::hasLayers && !sCheckValidationLayerSupport()) {
     VO_TRACE(3, "Checking validation layers");
     vk0Alert("Validation layers NOT available!");
   }
 
   auto constexpr v   = VK_API_VERSION_1_0;
-  auto const appInfo = vk::ApplicationInfo { mTitle.c_str(), v, "Vonsai", v, v };
+  auto const appInfo = vk::ApplicationInfo { mTitle.c_str(), v, "vonsai", v, v };
 
   // . Window Extensions
-  auto const exts = getRequiredExtensions();
+  auto const exts = sGetRequiredExtensions();
 
   // . Creating instance
   auto const flags = vk::InstanceCreateFlags();
@@ -148,20 +177,20 @@ void App::createInstance()
 
 //-----------------------------------------------------------------------------
 
-void App::createSurface()
+void app::createSurface()
 {
   VkSurfaceKHR rawSurface;
-  vk0TestFnC(glfwCreateWindowSurface(*mInstance, mWindow, nullptr, &rawSurface));
+  vk0TestFnC(glfwCreateWindowSurface(*mInstance, mWindow, nullptr, &rawSurface))
 
   mSurface = rawSurface;
 }
 
 //-----------------------------------------------------------------------------
 
-void App::pickPhysicalDevice()
+void app::pickPhysicalDevice()
 {
   auto const devices = vk0Call(mInstance->enumeratePhysicalDevices());
-  if (devices.size() == 0) { vk0AlertAbort("Failed to find GPUs with Vulkan support!"); }
+  if (devices.empty()) { vk0AlertAbort("Failed to find GPUs with Vulkan support!") }
 
   for (const auto &device : devices) {
     auto const queueFamilyIndices = vk0::QueueFamilyIndices { device, mSurface };
@@ -172,7 +201,7 @@ void App::pickPhysicalDevice()
       break;
     }
   }
-  if (!mPhysicalDevice) { vk0AlertAbort("Failed to find a suitable GPU"); }
+  if (!mPhysicalDevice) { vk0AlertAbort("Failed to find a suitable GPU") }
 
 #if vk0VERBOSE
   // . Getting extensions
@@ -185,7 +214,7 @@ void App::pickPhysicalDevice()
 
 //-----------------------------------------------------------------------------
 
-void App::createLogicalDevice()
+void app::createLogicalDevice()
 {
   auto const deviceFeatures   = vk::PhysicalDeviceFeatures();
   auto const queuesCreateInfo = mQueueFamilyIndices.getCreateInfo();
@@ -202,55 +231,8 @@ void App::createLogicalDevice()
 
 //-----------------------------------------------------------------------------
 
-void App::createSwapChain() {}
+void app::createSwapChain() {}
 
 //-----------------------------------------------------------------------------
 
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-//-----------------------------------------------------------------------------
-
-bool App::checkValidationLayerSupport()
-{
-  auto const availableLayers = vk::enumerateInstanceLayerProperties().value;
-
-  for (auto layerName : vk0::layers) {
-    auto const found = std::any_of(availableLayers.begin(), availableLayers.end(), [&](auto const layer) {
-      return std::string_view(layerName) == layer.layerName;
-    });
-
-    if (!found) {
-      vk0AlertFmt("Layer {} not found.", layerName);
-      return false;
-    }
-  }
-
-  return true;
-}
-
-//-----------------------------------------------------------------------------
-
-std::vector<const char *> App::getRequiredExtensions()
-{
-  uint32_t     glfwExtensionCount = 0;
-  const char **glfwExtensions;
-  glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-  std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-
-  if (vk0::hasLayers) { extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
-
-  return extensions;
-}
-
-//-----------------------------------------------------------------------------
-
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-//-----------------------------------------------------------------------------
-
-}  // namespace Vonsai
+}  // namespace vonsai

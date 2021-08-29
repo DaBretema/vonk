@@ -1,5 +1,11 @@
-.DS_Store
-.cache/
-.vscode/
-build/
-imgui.ini
+# Remove all
+*
+
+# Only store files below (with ! before path/expression)
+!include/*
+!src/*
+!test/*
+!vendor/*
+!.gitignore
+!.gitmodules
+!cmakelists.txt

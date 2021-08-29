@@ -22,7 +22,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL callback(
     { VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT, "Warning" },
     { VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT, "Error" },
   };
-  static const std::unordered_map<int, std::string_view> typeToStr {
+  static const std::unordered_map<uint32_t, std::string_view> typeToStr {
     { VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, "General" },
     { VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT, "Validation" },
     { VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT, "Performance" },
@@ -44,17 +44,17 @@ VKAPI_ATTR VkBool32 VKAPI_CALL callback(
 
 vk::DebugUtilsMessengerCreateInfoEXT DebugMessenger::defaultCreateInfo()
 {
-  auto const SeverityFlags = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
+  auto const severityFlags = vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose
                              | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning
                              | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
 
-  auto const TypeFlags = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
+  auto const typeFlags = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral
                          | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
                          | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
 
   return vk::DebugUtilsMessengerCreateInfoEXT { vk::DebugUtilsMessengerCreateFlagsEXT(),
-                                                SeverityFlags,
-                                                TypeFlags,
+                                                severityFlags,
+                                                typeFlags,
                                                 callback,
                                                 nullptr };
 }
@@ -69,7 +69,7 @@ void DebugMessenger::create(VkInstance const &instance)
 
   auto const createInfo  = defaultCreateInfo();
   auto const pCreateInfo = reinterpret_cast<VkDebugUtilsMessengerCreateInfoEXT const *>(&createInfo);
-  vk0InstanceResFn(instance, vkCreateDebugUtilsMessengerEXT, pCreateInfo, nullptr, &mDebugMessenger);
+  vk0InstanceResFn(instance, vkCreateDebugUtilsMessengerEXT, pCreateInfo, nullptr, &mDebugMessenger)
 }
 
 //---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ void DebugMessenger::create(VkInstance const &instance)
 void DebugMessenger::destroy(VkInstance const &instance)
 {
   if (!vk0::hasLayers) { return; }
-  vk0InstanceFn(instance, vkDestroyDebugUtilsMessengerEXT, mDebugMessenger, nullptr);
+  vk0InstanceFn(instance, vkDestroyDebugUtilsMessengerEXT, mDebugMessenger, nullptr)
 }
 
 //---------------------------------------------------------------------------

@@ -31,12 +31,13 @@ std::vector<vk::DeviceQueueCreateInfo> QueueFamilyIndices::getCreateInfo()
   std::set<uint32_t> uniqueQueueFamilies = { graphicsFamily.value(), presentFamily.value() };
 
   std::vector<vk::DeviceQueueCreateInfo> createInfos;
+  createInfos.resize(uniqueQueueFamilies.size());
 
   for (uint32_t queueFamily : uniqueQueueFamilies) {
-    createInfos.push_back({ vk::DeviceQueueCreateFlags(),
+    createInfos.emplace_back( vk::DeviceQueueCreateFlags(),
                             queueFamily,
                             1,  // queueCount
-                            &defaultPriority });
+                            &defaultPriority );
   }
 
   return createInfos;
