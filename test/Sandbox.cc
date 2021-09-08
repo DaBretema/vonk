@@ -1,7 +1,8 @@
-#include "app.hh"
+#include "Vonsai.h"
 
 int main()
 {
-  vonsai::app(800, 600, "Hello Vulkan").run();
+  vo::Vonsai app {800, 600, "Hello Vulkan"};
+  app.run();
   return 0;
 }

@@ -61,9 +61,7 @@ set(pLibsIncl ${Vulkan_INCLUDE_DIRS})
 # ------------------------------------------------------------------------- #
 
 add_library(${pName} STATIC
-        src/app.cc
-    ./src/vk0/vk0Debug.cc
-    ./src/vk0/vk0QueueFamilyIndices.cc
+    ./src/Vonsai.cpp
 )
 target_link_libraries(${pName} PRIVATE ${pLibs})
 target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLibsIncl})
