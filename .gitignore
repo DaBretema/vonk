@@ -2,10 +2,20 @@
 *
 
 # Only store files below (with ! before path/expression)
+
+!include/
 !include/*
+
+!src/
 !src/*
+
+!test/
 !test/*
+
+!vendor/
 !vendor/*
+
 !.gitignore
 !.gitmodules
+
 !cmakelists.txt
