@@ -1,5 +1,7 @@
+
 # Remove all
 *
+
 
 # Only store files below (with ! before path/expression)
 
@@ -19,3 +21,7 @@
 !.gitmodules
 
 !cmakelists.txt
+
+
+# Extra rules over whitelist
+.DS_Store
