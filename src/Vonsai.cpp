@@ -1,35 +1,10 @@
 #include "Vonsai.h"
 
 #include <fmt/core.h>
+
 #include "Settings.h"
-
-//-----------------------------------------------------------------------------
-// === PRINTERS
-//-----------------------------------------------------------------------------
-
-#ifndef NDEBUG
-#  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg)
-#else
-#  define VO_TRACE(s)
-#endif
-
-#define VO_ERR(msg)          fmt::print("[VO_ERR] - {}:{}\n↪ {}\n", __FILE__, __LINE__, msg)
-#define VO_ERR_FMT(msg, ...) VO_ERR(fmt::format(msg, __VA_ARGS__))
-
-#define VO_ERR_ABORT(msg) \
-  VOK_ERR(msg);           \
-  abort();
-
-#define VO_ERR_FMT_ABORT(msg) \
-  VOK_ERR_FMT(msg);           \
-  abort();
-
-#define VO_CHECK(vulkanCode) \
-  if (vulkanCode != VK_SUCCESS) { VO_ERR_ABORT(vulkanCode); }
-
-//===============================================
-//===============================================
-//===============================================
+#include "Macros.h"
+#include "Debug.h"
 
 //-----------------------------------------------------------------------------
 // === HELPERS
@@ -99,12 +74,14 @@ void Vonsai::run()
 void Vonsai::initWindow()
 {
   VO_TRACE(2, "GLFW Init");
-  glfwInit();
-  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
+  VO_CHECK(glfwInit());
   glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Resize windows takes special care
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
 
   VO_TRACE(2, "GLFW Create Window");
   mWindow = glfwCreateWindow(mW, mH, mTitle.c_str(), nullptr, nullptr);
+
+  // [] CALLBACKS SETUP ...
 }
 
 //-----------------------------------------------------------------------------
@@ -140,8 +117,7 @@ void Vonsai::mainLoop()
 void Vonsai::cleanup()
 {
   vkDestroyInstance(mVkInstance, nullptr);
-  //  // NOTE: mInstance and mDevice destruction is handled by Unique..wrappers
-  //
+
   //  // not using UniqeSwapchain to destroy in correct order - before the surface
   //  mLogicalDevice->destroySwapchainKHR(swapChain);
   //
@@ -161,6 +137,10 @@ void Vonsai::cleanup()
 
 void Vonsai::createInstance()
 {
+  if (vo::sHasValidationLayers && !sCheckValidationLayerSupport()) {
+    VO_ABORT("Validation layers requested, but not available!");
+  }
+
   VkApplicationInfo appInfo {};
   appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   appInfo.pApplicationName   = mTitle.c_str();
@@ -174,19 +154,18 @@ void Vonsai::createInstance()
   createInfo.pApplicationInfo = &appInfo;
 
   // . Esential extensions
-  uint32_t     glfwExtensionCount    = 0;
-  const char **glfwExtensions        = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-  createInfo.enabledExtensionCount   = glfwExtensionCount;
-  createInfo.ppEnabledExtensionNames = glfwExtensions;
+  auto extensions                    = sGetRequiredExtensions();
+  createInfo.enabledExtensionCount   = VX_SIZE_CAST(extensions.size());
+  createInfo.ppEnabledExtensionNames = extensions.data();
 
   // . Show all available extensions
-  uint32_t extensionCount = 0;
-  vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-  std::vector<VkExtensionProperties> extensions(extensionCount);
-  vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+  uint32_t allExtensionCount = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, nullptr);
+  std::vector<VkExtensionProperties> allExtensions(allExtensionCount);
+  vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, allExtensions.data());
   // .. Show info about extensions
   fmt::print("[*] Available DEVICE Extensions\n");
-  for (auto const &ext : extensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
+  for (auto const &ext : allExtensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
 
   // . Layers
   if (vo::sHasValidationLayers) {
@@ -196,7 +175,7 @@ void Vonsai::createInstance()
     createInfo.enabledLayerCount = 0;
   }
 
-  VO_CHECK(vkCreateInstance(&createInfo, nullptr, &mVkInstance));
+  VX_CHECK(vkCreateInstance(&createInfo, nullptr, &mVkInstance));
 }
 
 //-----------------------------------------------------------------------------

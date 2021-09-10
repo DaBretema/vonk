@@ -52,8 +52,11 @@ add_subdirectory(vendor/glm)
 add_subdirectory(vendor/glfw)
 # add_subdirectory(vendor/assimp)
 
-set(pLibs fmt glm glfw ${Vulkan_LIBRARIES})
 set(pLibsIncl ${Vulkan_INCLUDE_DIRS})
+set(pLibs fmt glm glfw ${Vulkan_LIBRARIES})
+
+message(STATUS "V LibsIncl: ${Vulkan_INCLUDE_DIRS}")
+message(STATUS "V Libs: ${Vulkan_LIBRARIES}")
 
 
 # ------------------------------------------------------------------------- #
@@ -61,6 +64,12 @@ set(pLibsIncl ${Vulkan_INCLUDE_DIRS})
 # ------------------------------------------------------------------------- #
 
 add_library(${pName} STATIC
+    ./include/_vulkan.h
+
+    ./include/Settings.h
+    ./include/Macros.h
+    ./include/Debug.h
+
     ./src/Vonsai.cpp
 )
 target_link_libraries(${pName} PRIVATE ${pLibs})
