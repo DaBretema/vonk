@@ -64,12 +64,21 @@ message(STATUS "V Libs: ${Vulkan_LIBRARIES}")
 # ------------------------------------------------------------------------- #
 
 add_library(${pName} STATIC
-    ./include/_vulkan.h
+    ./include/VwVulkan.h
 
+    ./include/VwDebugMessenger.h
+    ./src/VwDebugMessenger.cpp
+
+    ./include/VwQueueFamily.h
+    ./src/VwQueueFamily.cpp
+
+    #---
     ./include/Settings.h
     ./include/Macros.h
-    ./include/Debug.h
 
+    #---
+
+    ./include/Vonsai.h
     ./src/Vonsai.cpp
 )
 target_link_libraries(${pName} PRIVATE ${pLibs})
@@ -80,7 +89,7 @@ target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLib
 # ------------------------------------------------------------------------- #
 
 function(addTest tName)
-    add_executable(${tName} test/${tName}.cc)
+    add_executable(${tName} test/${tName}.cpp)
     target_link_libraries(${tName} PRIVATE ${pLibs} ${pName})
     add_test(COMMAND ${tName})
 endfunction()

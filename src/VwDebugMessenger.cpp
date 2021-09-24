@@ -1,0 +1,72 @@
+#include "VwDebugMessenger.h"
+
+#include "Macros.h"
+#include "Settings.h"
+
+namespace vo
+{
+static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugCallback(
+  VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+  VkDebugUtilsMessageTypeFlagsEXT             messageType,
+  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+  MBU void *                                  pUserData)
+{
+  static const std::unordered_map<int, std::string_view> severityToStr {
+    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT, "Verbose" },
+    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT, "Info" },
+    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT, "Warning" },
+    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT, "Error" },
+  };
+  static const std::unordered_map<uint32_t, std::string_view> typeToStr {
+    { VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, "General" },
+    { VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT, "Validation" },
+    { VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT, "Performance" },
+  };
+
+  if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+    fmt::print(
+      "\n VX - [{} / {} / {}] \n--------------------------------------------------\n{}\n",
+      pUserData,
+      severityToStr.at(messageSeverity),
+      typeToStr.at(messageType),
+      pCallbackData->pMessage);
+  }
+
+  return VK_FALSE;
+}
+
+//=============================================================================
+
+DebugMessenger::DebugMessenger()
+{
+  createInfo.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT
+                               | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT
+                               | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+  createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
+                           | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+  createInfo.pfnUserCallback = sDebugCallback;
+  createInfo.pUserData       = nullptr;  // Optional
+  createInfo.pNext           = nullptr;  // Mandatory
+}
+
+//-----------------------------------------------
+
+void DebugMessenger::create(VkInstance const &instance)
+{
+  if (!vo::sHasValidationLayers) return;
+
+  VW_INSTANCE_FN(instance, vkCreateDebugUtilsMessengerEXT, &createInfo, nullptr, &debugMessenger);
+}
+
+//-----------------------------------------------
+
+void DebugMessenger::destroy(VkInstance const &instance)
+{
+  if (!vo::sHasValidationLayers) return;
+
+  VW_INSTANCE_FN(instance, vkDestroyDebugUtilsMessengerEXT, debugMessenger, nullptr);
+}
+
+//-----------------------------------------------
+}  // namespace vo

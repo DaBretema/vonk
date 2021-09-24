@@ -1,10 +1,12 @@
 #include "Vonsai.h"
 
+#include <map>
+#include <vector>
+
 #include <fmt/core.h>
 
-#include "Settings.h"
 #include "Macros.h"
-#include "Debug.h"
+#include "Settings.h"
 
 //-----------------------------------------------------------------------------
 // === HELPERS
@@ -32,12 +34,10 @@ bool sCheckValidationLayerSupport()
   vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
   auto &L = availableLayers;
-  for (auto layerName : vo::sValidationLayers) {
-    auto const found =
-      std::any_of(L.begin(), L.end(), [&](auto &&l) { return std::string_view(layerName) == l.layerName; });
-
+  for (auto name : vo::sValidationLayers) {
+    auto const found = std::any_of(L.begin(), L.end(), [&](auto &&l) { return std::string_view(name) == l.layerName; });
     if (!found) {
-      VO_ERR_FMT("Layer {} not found.", layerName);
+      VO_ERR_FMT("Layer {} not found.", name);
       return false;
     }
   }
@@ -90,14 +90,14 @@ void Vonsai::initVulkan()
 {
   VO_TRACE(2, "Create Instance");
   createInstance();
-  //  VO_TRACE(2, "Setup Debug callback");
-  //  mDebugMessenger.create(*mInstance);
+  VO_TRACE(2, "Setup Debug callback");
+  mDebugMessenger.create(mInstance);
   //  VO_TRACE(2, "Create Surface");
   //  createSurface();
-  //  VO_TRACE(2, "Pick physical device");
-  //  pickPhysicalDevice();
-  //  VO_TRACE(2, "Create logical device");
-  //  createLogicalDevice();
+  VO_TRACE(2, "Pick physical device");
+  pickPhysicalDevice();
+  VO_TRACE(2, "Create logical device");
+  createLogicalDevice();
   //  VO_TRACE(2, "Create SWAP-CHAIN");
   //  createSwapChain();
 }
@@ -116,7 +116,14 @@ void Vonsai::mainLoop()
 
 void Vonsai::cleanup()
 {
-  vkDestroyInstance(mVkInstance, nullptr);
+  // . Devices
+  vkDestroyDevice(mLogicalDevice, nullptr);
+
+  // . Clean everything related to the instance
+  mDebugMessenger.destroy(mInstance);
+
+  // . Destroy the instance itself
+  vkDestroyInstance(mInstance, nullptr);
 
   //  // not using UniqeSwapchain to destroy in correct order - before the surface
   //  mLogicalDevice->destroySwapchainKHR(swapChain);
@@ -137,7 +144,7 @@ void Vonsai::cleanup()
 
 void Vonsai::createInstance()
 {
-  if (vo::sHasValidationLayers && !sCheckValidationLayerSupport()) {
+  if (vo::sHasValidationLayers and !sCheckValidationLayerSupport()) {
     VO_ABORT("Validation layers requested, but not available!");
   }
 
@@ -155,17 +162,8 @@ void Vonsai::createInstance()
 
   // . Esential extensions
   auto extensions                    = sGetRequiredExtensions();
-  createInfo.enabledExtensionCount   = VX_SIZE_CAST(extensions.size());
+  createInfo.enabledExtensionCount   = VW_SIZE_CAST(extensions.size());
   createInfo.ppEnabledExtensionNames = extensions.data();
-
-  // . Show all available extensions
-  uint32_t allExtensionCount = 0;
-  vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, nullptr);
-  std::vector<VkExtensionProperties> allExtensions(allExtensionCount);
-  vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, allExtensions.data());
-  // .. Show info about extensions
-  fmt::print("[*] Available DEVICE Extensions\n");
-  for (auto const &ext : allExtensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
 
   // . Layers
   if (vo::sHasValidationLayers) {
@@ -175,7 +173,18 @@ void Vonsai::createInstance()
     createInfo.enabledLayerCount = 0;
   }
 
-  VX_CHECK(vkCreateInstance(&createInfo, nullptr, &mVkInstance));
+  VW_CHECK(vkCreateInstance(&createInfo, nullptr, &mInstance));
+
+#if VO_VERBOSE
+  // . Show all available extensions
+  uint32_t allExtensionCount = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, nullptr);
+  std::vector<VkExtensionProperties> allExtensions(allExtensionCount);
+  vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, allExtensions.data());
+  // .. Show info about extensions
+  fmt::print("[*] Available INSTANCE Extensions\n");
+  for (auto const &ext : allExtensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -192,44 +201,105 @@ void Vonsai::createSurface()
 
 void Vonsai::pickPhysicalDevice()
 {
-  //  auto const devices = vk0Call(mInstance->enumeratePhysicalDevices());
-  //  if (devices.empty()) { vk0AlertAbort("Failed to find GPUs with Vulkan support!") }
-  //
-  //  for (const auto &device : devices) {
-  //    auto const queueFamilyIndices = vk0::QueueFamilyIndices { device, mSurface };
-  //
-  //    if (queueFamilyIndices.isComplete()) {
-  //      mQueueFamilyIndices = queueFamilyIndices;
-  //      mPhysicalDevice     = device;
-  //      break;
-  //    }
-  //  }
-  //  if (!mPhysicalDevice) { vk0AlertAbort("Failed to find a suitable GPU") }
-  //
-  //#if vk0VERBOSE
-  //  // . Getting extensions
-  //  auto const extensions = vk0Call(mPhysicalDevice.enumerateDeviceExtensionProperties());
-  //  // . Show info about extensions
-  //  fmt::print("[*] Available DEVICE Extensions [{}]\n", fmt::ptr(&mPhysicalDevice));
-  //  for (auto const &ext : extensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
-  //#endif
+  // . Get num of available devices
+  uint32_t physicalDeviceCount = 0;
+  vkEnumeratePhysicalDevices(mInstance, &physicalDeviceCount, nullptr);
+  if (physicalDeviceCount == 0) { VO_ABORT("Failed to find GPUs with Vulkan support!"); }
+
+  // . Collect them
+  std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
+  vkEnumeratePhysicalDevices(mInstance, &physicalDeviceCount, physicalDevices.data());
+
+  // . Calculate score for all available physical-devices
+  uint32_t maxScore = 0;
+  for (const auto &physicalDevice : physicalDevices) {
+    // .. VkObjects needed
+    mQueueFamilies.findIndices(physicalDevice);
+    VkPhysicalDeviceFeatures features;
+    vkGetPhysicalDeviceFeatures(physicalDevice, &features);
+    VkPhysicalDeviceProperties properties;
+    vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+    // .. Score computation
+    const int      isDiscrete        = 1000 * (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+    const int      discardConditions = { !mQueueFamilies.isComplete() or !features.geometryShader };
+    uint32_t const score             = discardConditions * (isDiscrete + properties.limits.maxImageDimension2D);
+
+    // .. Store candidate
+    if (score > maxScore) {
+      mPhysicalDevice           = physicalDevice;
+      mPhysicalDeviceFeatures   = features;
+      mPhysicalDeviceProperties = properties;
+      maxScore                  = score;
+    }
+  }
+
+  // . Pick one based on it's score
+  if (maxScore < 1) { VO_ABORT("Suitable GPU not found!"); }
+
+  // ...
+
+#if VO_VERBOSE
+  fmt::print(
+    "*** Name: {} - Type: {} - Score: {} \n",
+    mPhysicalDeviceProperties.deviceName,
+    mPhysicalDeviceProperties.deviceType,
+    pdCandidates.rbegin()->first);
+
+  // . Show all available extensions
+  uint32_t allExtensionCount = 0;
+  vkEnumerateDeviceExtensionProperties(mPhysicalDevice, nullptr, &allExtensionCount, nullptr);
+  std::vector<VkExtensionProperties> allExtensions(allExtensionCount);
+  vkEnumerateDeviceExtensionProperties(mPhysicalDevice, nullptr, &allExtensionCount, allExtensions.data());
+  // .. Show info about extensions
+  fmt::print("[*] Available DEVICE Extensions\n");
+  for (auto const &ext : allExtensions) { fmt::print(" ↳ {}\n", ext.extensionName); }
+#endif
 }
 
 //-----------------------------------------------------------------------------
 
 void Vonsai::createLogicalDevice()
 {
-  //  auto const deviceFeatures   = vk::PhysicalDeviceFeatures();
-  //  auto const queuesCreateInfo = mQueueFamilyIndices.getCreateInfo();
-  //  auto const createInfo       = vk::DeviceCreateInfo { vk::DeviceCreateFlags(),
-  //                                                 vk0SizeData(queuesCreateInfo),
-  //                                                 vk0SizeData(vk0::layers),
-  //                                                 vk0SizeData(vk0::extensions),
-  //                                                 &deviceFeatures };
-  //
-  //  mLogicalDevice = vk0Call(mPhysicalDevice.createDeviceUnique(createInfo));
-  //  mQueueGraphics = mLogicalDevice->getQueue(mQueueFamilyIndices.graphicsFamily.value(), 0);
-  //  mQueuePresent  = mLogicalDevice->getQueue(mQueueFamilyIndices.presentFamily.value(), 0);
+  // . Objects
+
+  // .. [Create-Info] Graphics Queue
+  float                   queuePriority = 1.0f;
+  VkDeviceQueueCreateInfo queueCreateInfo {};
+  queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+  queueCreateInfo.queueFamilyIndex = mQueueFamilies.getGraphicsIndex();
+  queueCreateInfo.queueCount       = 1;
+  queueCreateInfo.pQueuePriorities = &queuePriority;
+
+  // .. Device desired features
+  VkPhysicalDeviceFeatures deviceFeatures {};
+
+  // . [Create-Info] Logical Device
+  VkDeviceCreateInfo createInfo {};
+  createInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  createInfo.pQueueCreateInfos    = &queueCreateInfo;
+  createInfo.queueCreateInfoCount = 1;
+  createInfo.pEnabledFeatures     = &deviceFeatures;
+
+  // .. Set device extensions
+  if (vo::sHasExtensions) {
+    createInfo.enabledExtensionCount   = VW_SIZE_CAST(vo::sExtensions.size());
+    createInfo.ppEnabledExtensionNames = vo::sExtensions.data();
+  } else {
+    createInfo.enabledExtensionCount = 0;
+  }
+
+  // .. Set device validation layers
+  if (vo::sHasValidationLayers) {
+    createInfo.enabledLayerCount   = VW_SIZE_CAST(vo::sValidationLayers.size());
+    createInfo.ppEnabledLayerNames = vo::sValidationLayers.data();
+  } else {
+    createInfo.enabledLayerCount = 0;
+  }
+
+  // . Creation and pick real queues from it
+  VW_CHECK(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mLogicalDevice));
+  mQueueFamilies.findQueues(mLogicalDevice);
 }
 
 //-----------------------------------------------------------------------------

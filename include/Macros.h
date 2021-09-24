@@ -5,6 +5,8 @@
 
 namespace vo
 {
+#define MBU [[maybe_unused]]
+
 //-----------------------------------------------------------------------------
 // === PRINTERS
 //-----------------------------------------------------------------------------
@@ -21,32 +23,35 @@ namespace vo
   VO_ERR(msg);        \
   abort();
 
-#define VO_ABORT_FMT(msg) \
-  VO_ERR_FMT(msg);        \
+#define VO_ABORT_FMT(msg, ...)  \
+  VO_ERR_FMT(msg, __VA_ARGS__); \
   abort();
 
 #define VO_CHECK(conditionCode) \
   if (!conditionCode) { VO_ABORT(#conditionCode); }
 
 //-----------------------------------------------------------------------------
-// === VULKAN MACROS
+// === VULKAN MACROS = VW_
 //-----------------------------------------------------------------------------
 
-#define VX_CHECK(vulkanCode) \
-  if (vulkanCode != VK_SUCCESS) { VO_ABORT(#vulkanCode); }
+// ::: Validate api calls
+#define VW_CHECK(vulkanCode) \
+  if (VkResult res = vulkanCode; res != VK_SUCCESS) { VO_ABORT_FMT("{} : {}", res, #vulkanCode); }
 
-#define VX_SIZE_CAST(v) static_cast<uint32_t>(v)
+// ::: Cast shortcut
+#define VW_SIZE_CAST(v) static_cast<uint32_t>(v)
 
-//-----------------------------------------------------------------------------
-// === Get EXT functions
-//-----------------------------------------------------------------------------
-
-#define vk0InstanceFn(instance, extName, ...) \
-  if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { fn(instance, __VA_ARGS__); }
-
-#define vk0InstanceResFn(instance, extName, ...)                                  \
+// ::: Get instance functions
+#define VW_INSTANCE_FN(instance, extName, ...)                                    \
   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
-    vk0TestFnC(fn(instance, __VA_ARGS__));                                        \
+    fn(instance, __VA_ARGS__);                                                    \
+  } else {                                                                        \
+    VO_ERR_FMT("Function {} is not available", #extName);                         \
   }
+
+// #define vk0InstanceResFn(instance, extName, ...)                                  \
+//   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
+//     vk0TestFnC(fn(instance, __VA_ARGS__));                                        \
+//   }
 
 }  // namespace vo
