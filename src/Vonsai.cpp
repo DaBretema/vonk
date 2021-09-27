@@ -12,35 +12,57 @@
 // === HELPERS
 //-----------------------------------------------------------------------------
 
-std::vector<char const *> sGetRequiredExtensions()
+std::vector<char const *> sGetInstanceExtensions()
 {
   uint32_t     glfwExtensionCount = 0;
   char const **glfwExtensions     = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-  std::vector<char const *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+  std::vector<char const *> instanceExtensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-  if (vo::sHasValidationLayers) extensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+  if (vo::sHasValidationLayers) { instanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
 
-  return extensions;
+  if (vo::sHasInstanceExtensions) {
+    for (auto &&ext : vo::sInstanceExtensions) { instanceExtensions.emplace_back(ext); }
+  }
+
+  return instanceExtensions;
+}
+
+//-----------------------------------------------------------------------------
+
+bool sCheckDeviceExtensionSupport(VkPhysicalDevice physicalDevice)
+{
+  uint32_t count;
+  vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+  std::vector<VkExtensionProperties> available(count);
+  vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, available.data());
+
+  std::set<std::string> required(vo::sDeviceExtensions.begin(), vo::sDeviceExtensions.end());
+  for (const auto &item : available) { required.erase(item.extensionName); }
+  return required.empty();
 }
 
 //-----------------------------------------------------------------------------
 
 bool sCheckValidationLayerSupport()
 {
-  uint32_t layerCount;
-  vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-  std::vector<VkLayerProperties> availableLayers(layerCount);
-  vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+  uint32_t count;
+  vkEnumerateInstanceLayerProperties(&count, nullptr);
+  std::vector<VkLayerProperties> available(count);
+  vkEnumerateInstanceLayerProperties(&count, available.data());
 
-  auto &L = availableLayers;
-  for (auto name : vo::sValidationLayers) {
-    auto const found = std::any_of(L.begin(), L.end(), [&](auto &&l) { return std::string_view(name) == l.layerName; });
-    if (!found) {
-      VO_ERR_FMT("Layer {} not found.", name);
-      return false;
-    }
-  }
+  std::set<std::string> required(vo::sValidationLayers.begin(), vo::sValidationLayers.end());
+  for (const auto &item : available) { required.erase(item.layerName); }
+  return required.empty();
+
+  // auto &L = available;
+  // for (auto name : vo::sValidationLayers) {
+  //   auto const found = std::any_of(L.begin(), L.end(), [&](auto &&l) { return std::string_view(name) == l.layerName;
+  //   }); if (!found) {
+  //     VO_ERR_FMT("Layer {} not found.", name);
+  //     return false;
+  //   }
+  // }
 
   return true;
 }
@@ -162,9 +184,9 @@ void Vonsai::createInstance()
   createInfo.pApplicationInfo = &appInfo;
 
   // . Esential extensions
-  auto extensions                    = sGetRequiredExtensions();
-  createInfo.enabledExtensionCount   = VW_SIZE_CAST(extensions.size());
-  createInfo.ppEnabledExtensionNames = extensions.data();
+  auto const instanceExtensions      = sGetInstanceExtensions();
+  createInfo.enabledExtensionCount   = VW_SIZE_CAST(instanceExtensions.size());
+  createInfo.ppEnabledExtensionNames = instanceExtensions.data();
 
   // . Layers
   if (vo::sHasValidationLayers) {
@@ -217,7 +239,8 @@ void Vonsai::pickPhysicalDevice()
 
     // .. Score computation
     const int      isDiscrete        = 1000 * (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-    const int      discardConditions = { !mQueueFamilies.isComplete() or !features.geometryShader };
+    const int      discardConditions = { !mQueueFamilies.isComplete() or sCheckDeviceExtensionSupport(physicalDevice)
+                                    or !features.geometryShader };
     uint32_t const score             = discardConditions * (isDiscrete + properties.limits.maxImageDimension2D);
 
     // .. Store candidate
@@ -282,9 +305,9 @@ void Vonsai::createLogicalDevice()
   createInfo.pEnabledFeatures     = &deviceFeatures;
 
   // .. Set device extensions
-  if (vo::sHasExtensions) {
-    createInfo.enabledExtensionCount   = VW_SIZE_CAST(vo::sExtensions.size());
-    createInfo.ppEnabledExtensionNames = vo::sExtensions.data();
+  if (vo::sHasDeviceExtensions) {
+    createInfo.enabledExtensionCount   = VW_SIZE_CAST(vo::sDeviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = vo::sDeviceExtensions.data();
   } else {
     createInfo.enabledExtensionCount = 0;
   }

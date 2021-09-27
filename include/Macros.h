@@ -49,9 +49,4 @@ namespace vo
     VO_ERR_FMT("Function {} is not available", #extName);                         \
   }
 
-// #define vk0InstanceResFn(instance, extName, ...)                                  \
-//   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
-//     vk0TestFnC(fn(instance, __VA_ARGS__));                                        \
-//   }
-
 }  // namespace vo
