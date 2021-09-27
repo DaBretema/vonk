@@ -64,22 +64,22 @@ message(STATUS "V Libs: ${Vulkan_LIBRARIES}")
 # ------------------------------------------------------------------------- #
 
 add_library(${pName} STATIC
-    ./include/VwVulkan.h
+./include/VwVulkan.h
 
-    ./include/VwDebugMessenger.h
-    ./src/VwDebugMessenger.cpp
+./include/VwDebugMessenger.h
+./src/VwDebugMessenger.cpp
 
-    ./include/VwQueueFamily.h
-    ./src/VwQueueFamily.cpp
+./include/VwQueueFamily.h
+./src/VwQueueFamily.cpp
 
-    #---
-    ./include/Settings.h
-    ./include/Macros.h
+#---
+./include/Defines.h
+./include/Settings.h
+./include/Macros.h
+#---
 
-    #---
-
-    ./include/Vonsai.h
-    ./src/Vonsai.cpp
+./include/Vonsai.h
+./src/Vonsai.cpp
 )
 target_link_libraries(${pName} PRIVATE ${pLibs})
 target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLibsIncl})

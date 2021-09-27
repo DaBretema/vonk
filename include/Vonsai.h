@@ -3,12 +3,11 @@
 #include <string>
 
 #include "VwVulkan.h"
+#include <GLFW/glfw3.h>
+#include <GLFW/glfw3native.h>
+
 #include "VwQueueFamily.h"
 #include "VwDebugMessenger.h"
-
-#include <GLFW/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_COCOA
-#include <GLFW/glfw3native.h>
 
 namespace vo
 {
@@ -52,8 +51,9 @@ private:
   vo::QueueFamily    mQueueFamilies {};
   vo::DebugMessenger mDebugMessenger {};
 
-  // Vulkan initialization
-  //---------------------------------------------------------------------------
+  VkSurfaceKHR mSurface;
+
+  // ::: Vulkan initialization
 
   void createInstance();
   void createSurface();

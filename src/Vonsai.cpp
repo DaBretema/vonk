@@ -92,8 +92,8 @@ void Vonsai::initVulkan()
   createInstance();
   VO_TRACE(2, "Setup Debug callback");
   mDebugMessenger.create(mInstance);
-  //  VO_TRACE(2, "Create Surface");
-  //  createSurface();
+  VO_TRACE(2, "Create Surface");
+  createSurface();
   VO_TRACE(2, "Pick physical device");
   pickPhysicalDevice();
   VO_TRACE(2, "Create logical device");
@@ -121,6 +121,7 @@ void Vonsai::cleanup()
 
   // . Clean everything related to the instance
   mDebugMessenger.destroy(mInstance);
+  vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
 
   // . Destroy the instance itself
   vkDestroyInstance(mInstance, nullptr);
@@ -189,13 +190,7 @@ void Vonsai::createInstance()
 
 //-----------------------------------------------------------------------------
 
-void Vonsai::createSurface()
-{
-  //  VkSurfaceKHR rawSurface;
-  //  vk0TestFnC(glfwCreateWindowSurface(*mInstance, mWindow, nullptr, &rawSurface))
-  //
-  //  mSurface = rawSurface;
-}
+void Vonsai::createSurface() { VW_CHECK(glfwCreateWindowSurface(mInstance, mWindow, nullptr, &mSurface)); }
 
 //-----------------------------------------------------------------------------
 
@@ -214,7 +209,7 @@ void Vonsai::pickPhysicalDevice()
   uint32_t maxScore = 0;
   for (const auto &physicalDevice : physicalDevices) {
     // .. VkObjects needed
-    mQueueFamilies.findIndices(physicalDevice);
+    mQueueFamilies.findIndices(physicalDevice, mSurface);
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(physicalDevice, &features);
     VkPhysicalDeviceProperties properties;
@@ -264,12 +259,17 @@ void Vonsai::createLogicalDevice()
   // . Objects
 
   // .. [Create-Info] Graphics Queue
-  float                   queuePriority = 1.0f;
-  VkDeviceQueueCreateInfo queueCreateInfo {};
-  queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  queueCreateInfo.queueFamilyIndex = mQueueFamilies.getGraphicsIndex();
-  queueCreateInfo.queueCount       = 1;
-  queueCreateInfo.pQueuePriorities = &queuePriority;
+  float const queuePriority = 1.0f;
+
+  std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+  for (uint32_t queueFamily : mQueueFamilies.getUniqueIndices()) {
+    VkDeviceQueueCreateInfo queueCreateInfo {};
+    queueCreateInfo.sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = queueFamily;
+    queueCreateInfo.queueCount       = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+    queueCreateInfos.push_back(queueCreateInfo);
+  }
 
   // .. Device desired features
   VkPhysicalDeviceFeatures deviceFeatures {};
@@ -277,8 +277,8 @@ void Vonsai::createLogicalDevice()
   // . [Create-Info] Logical Device
   VkDeviceCreateInfo createInfo {};
   createInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  createInfo.pQueueCreateInfos    = &queueCreateInfo;
-  createInfo.queueCreateInfoCount = 1;
+  createInfo.pQueueCreateInfos    = queueCreateInfos.data();
+  createInfo.queueCreateInfoCount = VW_SIZE_CAST(queueCreateInfos.size());
   createInfo.pEnabledFeatures     = &deviceFeatures;
 
   // .. Set device extensions
