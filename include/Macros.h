@@ -17,8 +17,8 @@ namespace vo
 #ifndef NDEBUG
 #  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg)
 #  if VO_FUNCTION_LINE_LOG
-#    define VO_INFO(msg) fmt::print("ℹ️ ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#    define VO_ERR(msg)  fmt::print("⚠️ ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#    define VO_INFO(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#    define VO_ERR(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
 // #    define VO_ERR(msg)  fmt::print("[VO_ERR] ({}:{})\n↪ {}\n", __FILE__, __LINE__, msg)
 #  else
 #    define VO_INFO(msg) fmt::print("ℹ️  {}\n", msg)

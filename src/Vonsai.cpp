@@ -105,14 +105,16 @@ void Vonsai::initVulkan()
   createInstance();
   VO_TRACE(2, "Setup Debug callback");
   mDebugMessenger.create(mInstance);
-  VO_TRACE(2, "Create Surface");
+  VO_TRACE(2, "Create Surface from window");
   createSurface();
-  VO_TRACE(2, "Pick physical device");
+  VO_TRACE(2, "Pick Physical-Device");
   pickPhysicalDevice();
-  VO_TRACE(2, "Create logical device");
+  VO_TRACE(2, "Create Logical-Device");
   createLogicalDevice();
   VO_TRACE(2, "Create SWAP-CHAIN");
   createSwapChain();
+  VO_TRACE(2, "Create Image-Views");
+  createImageViews();
 }
 
 //-----------------------------------------------------------------------------
@@ -129,15 +131,18 @@ void Vonsai::mainLoop()
 
 void Vonsai::cleanup()
 {
-  // . Devices
+  // . Logical Device
+  // .. Dependencies
+  for (auto imageView : mSwapChainImageViews) { vkDestroyImageView(mLogicalDevice, imageView, nullptr); }
   vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
+  // .. Itself
   vkDestroyDevice(mLogicalDevice, nullptr);
 
-  // . Clean everything related to the instance
+  // . Instance
+  // .. Dependencies
   mDebugMessenger.destroy(mInstance);
   vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
-
-  // . Destroy the instance itself
+  // .. Itself
   vkDestroyInstance(mInstance, nullptr);
 
   //  // not using UniqeSwapchain to destroy in correct order - before the surface
@@ -398,6 +403,44 @@ void Vonsai::createSwapChain()
   vkGetSwapchainImagesKHR(mLogicalDevice, mSwapChain, &imageCount, nullptr);
   mSwapChainImages.resize(imageCount);
   vkGetSwapchainImagesKHR(mLogicalDevice, mSwapChain, &imageCount, mSwapChainImages.data());
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::createImageViews()
+{
+  mSwapChainImageViews.resize(mSwapChainImages.size());
+
+  // . Create a image-view per image
+
+  for (size_t i = 0; i < mSwapChainImages.size(); i++) {
+    // .. [Create-Info] Swap-Chain
+    VkImageViewCreateInfo createInfo {};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image = mSwapChainImages[i];
+
+    // ... The viewType and format fields specify how the image data should be interpreted. The viewType parameter
+    // allows you to treat images as 1D textures, 2D textures, 3D textures and cube maps.
+    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    createInfo.format   = mSwapChainSettings.surfaceFormat.format;
+
+    // ... How to read RGBA
+    createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    // ... The subresourceRange field describes what the image's purpose is and which part of the image should be
+    // accessed. **For now** set it as color targets without any mipmapping levels or multiple layers
+    createInfo.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    createInfo.subresourceRange.baseMipLevel   = 0;  // MIP-MAPing the texture [TODO]
+    createInfo.subresourceRange.levelCount     = 1;
+    createInfo.subresourceRange.baseArrayLayer = 0;
+    createInfo.subresourceRange.layerCount     = 1;
+
+    // .. Creation
+    VW_CHECK(vkCreateImageView(mLogicalDevice, &createInfo, nullptr, &mSwapChainImageViews[i]));
+  }
 }
 
 //-----------------------------------------------------------------------------

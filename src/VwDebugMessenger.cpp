@@ -37,6 +37,7 @@ DebugMessenger::DebugMessenger()
   createInfo.pfnUserCallback = sDebugCallback;
   createInfo.pUserData       = nullptr;  // Optional
   createInfo.pNext           = nullptr;  // Mandatory
+  createInfo.flags           = 0;        // Mandatory
 }
 
 //-----------------------------------------------

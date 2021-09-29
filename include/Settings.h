@@ -8,7 +8,7 @@ namespace vo
 //-----------------------------------------------------------------------------
 #define VO_VERBOSE            1
 #define VO_VERBOSE_EXTENSIONS 0
-#define VO_FUNCTION_LINE_LOG  0
+#define VO_FUNCTION_LINE_LOG  1
 
 // === INSTANCE EXTENSIONS
 //-----------------------------------------------------------------------------

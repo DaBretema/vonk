@@ -59,9 +59,10 @@ private:
 
   VkSurfaceKHR mSurface;
 
-  VkSwapchainKHR        mSwapChain;
-  std::vector<VkImage>  mSwapChainImages;
-  vo::SwapChainSettings mSwapChainSettings;
+  VkSwapchainKHR           mSwapChain;
+  std::vector<VkImage>     mSwapChainImages;
+  vo::SwapChainSettings    mSwapChainSettings;
+  std::vector<VkImageView> mSwapChainImageViews;
 
   // ::: Vulkan initialization
 
@@ -70,6 +71,7 @@ private:
   void pickPhysicalDevice();
   void createLogicalDevice();
   void createSwapChain();
+  void createImageViews();
 };
 
 }  // namespace vo
