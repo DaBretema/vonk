@@ -2,6 +2,7 @@
 
 #include "Macros.h"
 #include "Settings.h"
+#include "VwToStr.h"
 
 namespace vo
 {
@@ -11,24 +12,12 @@ static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugCallback(
   const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
   MBU void *                                  pUserData)
 {
-  static const std::unordered_map<int, std::string_view> severityToStr {
-    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT, "Verbose" },
-    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT, "Info" },
-    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT, "Warning" },
-    { VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT, "Error" },
-  };
-  static const std::unordered_map<uint32_t, std::string_view> typeToStr {
-    { VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, "General" },
-    { VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT, "Validation" },
-    { VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT, "Performance" },
-  };
-
   if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
     fmt::print(
       "\n VX - [{} / {} / {}] \n--------------------------------------------------\n{}\n",
       pUserData,
-      severityToStr.at(messageSeverity),
-      typeToStr.at(messageType),
+      VwToStr_DebugSeverity.at(messageSeverity),
+      VwToStr_DebugType.at(messageType),
       pCallbackData->pMessage);
   }
 

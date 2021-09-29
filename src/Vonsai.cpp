@@ -30,7 +30,7 @@ std::vector<char const *> sGetInstanceExtensions()
 
 //-----------------------------------------------------------------------------
 
-bool sCheckDeviceExtensionSupport(VkPhysicalDevice physicalDevice)
+bool sCheckPhysicalDeviceExtensionSupport(VkPhysicalDevice physicalDevice)
 {
   uint32_t count;
   vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
@@ -54,15 +54,6 @@ bool sCheckValidationLayerSupport()
   std::set<std::string> required(vo::sValidationLayers.begin(), vo::sValidationLayers.end());
   for (const auto &item : available) { required.erase(item.layerName); }
   return required.empty();
-
-  // auto &L = available;
-  // for (auto name : vo::sValidationLayers) {
-  //   auto const found = std::any_of(L.begin(), L.end(), [&](auto &&l) { return std::string_view(name) == l.layerName;
-  //   }); if (!found) {
-  //     VO_ERR_FMT("Layer {} not found.", name);
-  //     return false;
-  //   }
-  // }
 
   return true;
 }
@@ -120,8 +111,8 @@ void Vonsai::initVulkan()
   pickPhysicalDevice();
   VO_TRACE(2, "Create logical device");
   createLogicalDevice();
-  //  VO_TRACE(2, "Create SWAP-CHAIN");
-  //  createSwapChain();
+  VO_TRACE(2, "Create SWAP-CHAIN");
+  createSwapChain();
 }
 
 //-----------------------------------------------------------------------------
@@ -139,6 +130,7 @@ void Vonsai::mainLoop()
 void Vonsai::cleanup()
 {
   // . Devices
+  vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
   vkDestroyDevice(mLogicalDevice, nullptr);
 
   // . Clean everything related to the instance
@@ -198,7 +190,7 @@ void Vonsai::createInstance()
 
   VW_CHECK(vkCreateInstance(&createInfo, nullptr, &mInstance));
 
-#if VO_VERBOSE
+#if VO_VERBOSE_EXTENSIONS
   // . Show all available extensions
   uint32_t allExtensionCount = 0;
   vkEnumerateInstanceExtensionProperties(nullptr, &allExtensionCount, nullptr);
@@ -229,19 +221,26 @@ void Vonsai::pickPhysicalDevice()
 
   // . Calculate score for all available physical-devices
   uint32_t maxScore = 0;
+
   for (const auto &physicalDevice : physicalDevices) {
-    // .. VkObjects needed
-    mQueueFamilies.findIndices(physicalDevice, mSurface);
+    // .. Physical data
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(physicalDevice, &features);
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
+    // .. VkObjects needed
+    mQueueFamilies.findIndices(physicalDevice, mSurface);
+    bool const swapChainIsEmpty = vo::swapchain::isEmpty(physicalDevice, mSurface);
+
     // .. Score computation
-    const int      isDiscrete        = 1000 * (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-    const int      discardConditions = { !mQueueFamilies.isComplete() or sCheckDeviceExtensionSupport(physicalDevice)
+    const int discardConditions = { !mQueueFamilies.isComplete()                              //
+                                    or swapChainIsEmpty                                       //
+                                    or !sCheckPhysicalDeviceExtensionSupport(physicalDevice)  //
                                     or !features.geometryShader };
-    uint32_t const score             = discardConditions * (isDiscrete + properties.limits.maxImageDimension2D);
+
+    const int      isDiscrete = 1000 * (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+    uint32_t const score      = discardConditions * (isDiscrete + properties.limits.maxImageDimension2D);
 
     // .. Store candidate
     if (score > maxScore) {
@@ -257,7 +256,7 @@ void Vonsai::pickPhysicalDevice()
 
   // ...
 
-#if VO_VERBOSE
+#if VO_VERBOSE_EXTENSIONS
   fmt::print(
     "*** Name: {} - Type: {} - Score: {} \n",
     mPhysicalDeviceProperties.deviceName,
@@ -279,9 +278,7 @@ void Vonsai::pickPhysicalDevice()
 
 void Vonsai::createLogicalDevice()
 {
-  // . Objects
-
-  // .. [Create-Info] Graphics Queue
+  // . [Create-Info] Queues
   float const queuePriority = 1.0f;
 
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -294,15 +291,12 @@ void Vonsai::createLogicalDevice()
     queueCreateInfos.push_back(queueCreateInfo);
   }
 
-  // .. Device desired features
-  VkPhysicalDeviceFeatures deviceFeatures {};
-
   // . [Create-Info] Logical Device
   VkDeviceCreateInfo createInfo {};
   createInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   createInfo.pQueueCreateInfos    = queueCreateInfos.data();
   createInfo.queueCreateInfoCount = VW_SIZE_CAST(queueCreateInfos.size());
-  createInfo.pEnabledFeatures     = &deviceFeatures;
+  createInfo.pEnabledFeatures     = &mPhysicalDeviceFeatures;
 
   // .. Set device extensions
   if (vo::sHasDeviceExtensions) {
@@ -327,7 +321,84 @@ void Vonsai::createLogicalDevice()
 
 //-----------------------------------------------------------------------------
 
-void Vonsai::createSwapChain() {}
+void Vonsai::createSwapChain()
+{
+  int iW, iH;
+  glfwGetFramebufferSize(mWindow, &iW, &iH);
+  uint32_t w = static_cast<uint32_t>(iW), h = static_cast<uint32_t>(iH);
+
+  mSwapChainSettings = vo::swapchain::getSettings(mPhysicalDevice, mSurface, vo::SwapChainRequestedSettings { w, h });
+  auto const &s      = mSwapChainSettings;
+
+#if VO_VERBOSE
+  s.dumpInfo();
+#endif
+
+  // . [Create-Info] Swap-Chain
+
+  VkSwapchainCreateInfoKHR createInfo {};
+  createInfo.sType   = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  createInfo.surface = mSurface;
+
+  // .. Copy settings
+  createInfo.minImageCount   = s.minImageCount;
+  createInfo.imageFormat     = s.surfaceFormat.format;
+  createInfo.imageColorSpace = s.surfaceFormat.colorSpace;
+  createInfo.imageExtent     = s.extent2D;
+  createInfo.presentMode     = s.presentMode;
+
+  // .. Always 1 unless you are developing a stereoscopic 3D application.
+  createInfo.imageArrayLayers = 1;
+
+  // .. Other options:
+  // VK_IMAGE_USAGE_TRANSFER_DST_BIT for post-pro and memory-op to transfer the rendered image to a swap-chain-img
+  // VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT for assign Depth and Stencil to main swap-chain-img (???)
+  createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+  // .. How to handle swap chain images that will be used across multiple queue families
+  // VK_SHARING_MODE_EXCLUSIVE: An image is owned by one queue family at a time and ownership must be explicitly
+  //   transferred before using it in another queue family. This option offers the best performance.
+  // VK_SHARING_MODE_CONCURRENT: Images can be used across multiple queue families without explicit
+  //   ownership transfers.
+  auto const queuefamilyindices = mQueueFamilies.getUniqueIndices();
+  if (queuefamilyindices.size() > 1) {
+    createInfo.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
+    createInfo.queueFamilyIndexCount = VW_SIZE_CAST(queuefamilyindices.size());
+    createInfo.pQueueFamilyIndices   = queuefamilyindices.data();
+  } else {
+    createInfo.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+    createInfo.queueFamilyIndexCount = 0;        // Optional
+    createInfo.pQueueFamilyIndices   = nullptr;  // Optional
+  }
+
+  // .. We can specify that a certain transform should be applied to images in the swap chain if it is supported
+  // (supportedTransforms in capabilities), like a 90 degree clockwise rotation or horizontal flip. To specify that you
+  // do not want any transformation, simply specify the current transformation.
+  createInfo.preTransform = s.capabilities.currentTransform;
+
+  // .. The {compositeAlpha} field specifies if the alpha channel should be used for blending with other windows in the
+  // window system. You'll almost always want to simply ignore the alpha channel.
+  createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+  // .. If clipped member is set to VK_TRUE then that means that we don't care about the color of pixels that are
+  // obscured, for example because another window is in front of them. Unless you really need to be able to read these
+  // pixels back and get predictable results, you'll get the best performance by enabling clipping.
+  createInfo.clipped = VK_TRUE;
+
+  // .. It's possible that your swap chain becomes invalid or unoptimized while your application is running, for example
+  // because the window was resized. In that case the swap chain actually needs to be recreated from scratch and a
+  // reference to the old one must be specified in this field.
+  createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+  // . Creation
+  VW_CHECK(vkCreateSwapchainKHR(mLogicalDevice, &createInfo, nullptr, &mSwapChain));
+
+  // . Caputre images
+  uint32_t imageCount;
+  vkGetSwapchainImagesKHR(mLogicalDevice, mSwapChain, &imageCount, nullptr);
+  mSwapChainImages.resize(imageCount);
+  vkGetSwapchainImagesKHR(mLogicalDevice, mSwapChain, &imageCount, mSwapChainImages.data());
+}
 
 //-----------------------------------------------------------------------------
 

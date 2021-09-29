@@ -3,21 +3,33 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include "Settings.h"
+
 namespace vo
 {
+//
+
+// ::: Mark argunment as unused to avoid warnings
 #define MBU [[maybe_unused]]
 
-//-----------------------------------------------------------------------------
 // === PRINTERS
 //-----------------------------------------------------------------------------
 #ifndef NDEBUG
 #  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg)
+#  if VO_FUNCTION_LINE_LOG
+#    define VO_INFO(msg) fmt::print("ℹ️ ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#    define VO_ERR(msg)  fmt::print("⚠️ ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+// #    define VO_ERR(msg)  fmt::print("[VO_ERR] ({}:{})\n↪ {}\n", __FILE__, __LINE__, msg)
+#  else
+#    define VO_INFO(msg) fmt::print("ℹ️  {}\n", msg)
+#    define VO_ERR(msg)  fmt::print("⚠️  {}\n", msg)
+#  endif
 #else
 #  define VO_TRACE(s)
 #endif
 
-#define VO_ERR(msg)          fmt::print("[VO_ERR] - {}:{}\n↪ {}\n", __FILE__, __LINE__, msg)
-#define VO_ERR_FMT(msg, ...) VO_ERR(fmt::format(msg, __VA_ARGS__))
+#define VO_INFO_FMT(msg, ...) VO_INFO(fmt::format(msg, __VA_ARGS__))
+#define VO_ERR_FMT(msg, ...)  VO_ERR(fmt::format(msg, __VA_ARGS__))
 
 #define VO_ABORT(msg) \
   VO_ERR(msg);        \

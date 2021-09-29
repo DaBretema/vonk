@@ -1,13 +1,14 @@
 #pragma once
-
 #include <array>
+#include <VwVulkan.h>
 
 namespace vo
 {
 // === OTHER DEFINES
 //-----------------------------------------------------------------------------
-
-#define VO_VERBOSE 0
+#define VO_VERBOSE            1
+#define VO_VERBOSE_EXTENSIONS 0
+#define VO_FUNCTION_LINE_LOG  0
 
 // === INSTANCE EXTENSIONS
 //-----------------------------------------------------------------------------
@@ -53,5 +54,7 @@ inline constexpr std::array                  sValidationLayers { "VK_LAYER_KHRON
 #endif
 
 inline constexpr bool sHasValidationLayers { !sValidationLayers.empty() };
+
+//-----------------------------------------------------------------------------
 
 }  // namespace vo

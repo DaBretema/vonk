@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "VwVulkan.h"
 #include <GLFW/glfw3.h>
@@ -8,10 +9,15 @@
 
 #include "VwQueueFamily.h"
 #include "VwDebugMessenger.h"
+#include "VwSwapChain.h"
 
 namespace vo
 {
-//
+//===============
+//===============
+//===============
+//===============
+//===============
 
 // VONSAI
 
@@ -52,6 +58,10 @@ private:
   vo::DebugMessenger mDebugMessenger {};
 
   VkSurfaceKHR mSurface;
+
+  VkSwapchainKHR        mSwapChain;
+  std::vector<VkImage>  mSwapChainImages;
+  vo::SwapChainSettings mSwapChainSettings;
 
   // ::: Vulkan initialization
 

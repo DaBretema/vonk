@@ -37,8 +37,12 @@ public:
   void findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
   void findQueues(VkDevice logicalDevice);
 
-  bool               isComplete();
-  std::set<uint32_t> getUniqueIndices();
+  bool                  isComplete();
+  std::vector<uint32_t> getUniqueIndices();
+
+private:
+  std::unordered_map<QueueType, QueueData> mQueues { { QueueType::graphics, QueueDataNull },
+                                                     { QueueType::present, QueueDataNull } };
 
   void     resetQueues();
   VkQueue &getQueueRef(QueueType t) { return mQueues.at(t).queue; }
@@ -47,10 +51,6 @@ public:
   void                     resetIndices();
   std::optional<uint32_t> &getIndexRef(QueueType t) { return mQueues.at(t).index; }
   uint32_t                 getIndexVal(QueueType t) const { return mQueues.at(t).index.value(); }
-
-private:
-  std::unordered_map<QueueType, QueueData> mQueues { { QueueType::graphics, QueueDataNull },
-                                                     { QueueType::present, QueueDataNull } };
 };
 
 //-----------------------------------------------

@@ -66,11 +66,17 @@ message(STATUS "V Libs: ${Vulkan_LIBRARIES}")
 add_library(${pName} STATIC
 ./include/VwVulkan.h
 
+./include/VwToStr.h
+# ./src/VwToStr.cpp
+
 ./include/VwDebugMessenger.h
 ./src/VwDebugMessenger.cpp
 
 ./include/VwQueueFamily.h
 ./src/VwQueueFamily.cpp
+
+./include/VwSwapChain.h
+./src/VwSwapChain.cpp
 
 #---
 ./include/Defines.h

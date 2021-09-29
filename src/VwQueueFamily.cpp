@@ -37,13 +37,18 @@ bool QueueFamily::isComplete()
 
 //-----------------------------------------------
 
-std::set<uint32_t> QueueFamily::getUniqueIndices()
+std::vector<uint32_t> QueueFamily::getUniqueIndices()
 {
-  std::set<uint32_t> indices;
+  std::set<uint32_t> uniqueIndices;
   for (auto &&[type, q] : mQueues) {
     (void)(type);
-    indices.emplace(q.index.value());
+    uniqueIndices.emplace(q.index.value());
   }
+
+  std::vector<uint32_t> indices;
+  indices.reserve(uniqueIndices.size());
+  for (auto &&i : uniqueIndices) { indices.emplace_back(i); }
+
   return indices;
 }
 
@@ -58,7 +63,7 @@ void QueueFamily::findQueues(VkDevice logicalDevice)
 
 void QueueFamily::findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
 {
-  if (physicalDevice == VK_NULL_HANDLE || surface == VK_NULL_HANDLE) {
+  if (physicalDevice == VK_NULL_HANDLE or surface == VK_NULL_HANDLE) {
     assert(0);
     return;
   }
