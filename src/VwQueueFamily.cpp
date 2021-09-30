@@ -2,7 +2,7 @@
 
 #include <vector>
 
-namespace vo
+namespace vku
 {
 //-----------------------------------------------
 
@@ -104,4 +104,4 @@ void QueueFamily::findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surf
 
 //-----------------------------------------------
 
-}  // namespace vo
+}  // namespace vku

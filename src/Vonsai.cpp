@@ -5,6 +5,7 @@
 
 #include <fmt/core.h>
 
+#include "Utils.h"
 #include "Macros.h"
 #include "Settings.h"
 
@@ -114,6 +115,7 @@ void Vonsai::initVulkan()
   VO_TRACE(2, "Create Instance");
   createInstance();
   VO_TRACE(2, "Setup Debug callback");
+  // vku::debugmessenger::create(mInstance, &??mDebugMessenger);
   mDebugMessenger.create(mInstance);
   VO_TRACE(2, "Create Surface from window");
   createSurface();
@@ -133,10 +135,10 @@ void Vonsai::initVulkan()
 
 void Vonsai::cleanup()
 {
-  // VO_TRACE(2, "Destroy Graphics-Pipeline");
-
   // . Logical Device
   // .. Dependencies
+  VO_TRACE(2, "Destroy Graphics-Pipeline");
+  for (auto [name, shaderModule] : mShaderModules) { vkDestroyShaderModule(mLogicalDevice, shaderModule, nullptr); }
   VO_TRACE(2, "Destroy Image-Views");
   for (auto imageView : mSwapChainImageViews) { vkDestroyImageView(mLogicalDevice, imageView, nullptr); }
   VO_TRACE(2, "Destroy SWAP-CHAIN");
@@ -150,6 +152,7 @@ void Vonsai::cleanup()
   VO_TRACE(2, "Destroy Surface");
   vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
   VO_TRACE(2, "Destroy Debug-Callback");
+  // vku::debugmessenger::destroy(mInstance, mDebugMessenger);
   mDebugMessenger.destroy(mInstance);
   // .. Itself
   VO_TRACE(2, "Destroy Instance");
@@ -245,8 +248,9 @@ void Vonsai::pickPhysicalDevice()
     vkGetPhysicalDeviceProperties(physicalDevice, &properties);
 
     // .. VkObjects needed
+    // vku::queues::findIndices(physicalDevice, mSurface)
     mQueueFamilies.findIndices(physicalDevice, mSurface);
-    bool const swapChainIsEmpty = vo::swapchain::isEmpty(physicalDevice, mSurface);
+    bool const swapChainIsEmpty = vku::swapchain::isEmpty(physicalDevice, mSurface);
 
     // .. Score computation
     const int discardConditions = { !mQueueFamilies.isComplete()                              //
@@ -342,11 +346,10 @@ void Vonsai::createSwapChain()
   glfwGetFramebufferSize(mWindow, &iW, &iH);
   uint32_t w = static_cast<uint32_t>(iW), h = static_cast<uint32_t>(iH);
 
-  mSwapChainSettings = vo::swapchain::getSettings(mPhysicalDevice, mSurface, vo::SwapChainRequestedSettings { w, h });
-  auto const &s      = mSwapChainSettings;
+  mSwapChainSettings = vku::swapchain::getSettings(mPhysicalDevice, mSurface, vku::swapchain::Settings { { w, h } });
 
 #if VO_VERBOSE
-  s.dumpInfo();
+  mSwapChainSettings.dumpInfo();
 #endif
 
   // . [Create-Info] Swap-Chain
@@ -356,11 +359,11 @@ void Vonsai::createSwapChain()
   createInfo.surface = mSurface;
 
   // .. Copy settings
-  createInfo.minImageCount   = s.minImageCount;
-  createInfo.imageFormat     = s.surfaceFormat.format;
-  createInfo.imageColorSpace = s.surfaceFormat.colorSpace;
-  createInfo.imageExtent     = s.extent2D;
-  createInfo.presentMode     = s.presentMode;
+  createInfo.minImageCount   = mSwapChainSettings.minImageCount;
+  createInfo.imageFormat     = mSwapChainSettings.surfaceFormat.format;
+  createInfo.imageColorSpace = mSwapChainSettings.surfaceFormat.colorSpace;
+  createInfo.imageExtent     = mSwapChainSettings.extent2D;
+  createInfo.presentMode     = mSwapChainSettings.presentMode;
 
   // .. Always 1 unless you are developing a stereoscopic 3D application.
   createInfo.imageArrayLayers = 1;
@@ -389,7 +392,7 @@ void Vonsai::createSwapChain()
   // .. We can specify that a certain transform should be applied to images in the swap chain if it is supported
   // (supportedTransforms in capabilities), like a 90 degree clockwise rotation or horizontal flip. To specify that you
   // do not want any transformation, simply specify the current transformation.
-  createInfo.preTransform = s.capabilities.currentTransform;
+  createInfo.preTransform = mSwapChainSettings.capabilities.currentTransform;
 
   // .. The {compositeAlpha} field specifies if the alpha channel should be used for blending with other windows in the
   // window system. You'll almost always want to simply ignore the alpha channel.
@@ -455,7 +458,40 @@ void Vonsai::createImageViews()
 
 //-----------------------------------------------------------------------------
 
-void Vonsai::createGraphicsPipeline() {}
+void Vonsai::createGraphicsPipeline()
+{
+  // . Get names
+  auto const name   = "base";
+  auto const vsName = VO_GET_SHADER_PATH_VERT(name);
+  auto const fsName = VO_GET_SHADER_PATH_FRAG(name);
+
+  // . Read shader content
+  auto vs = vo::files::read(vsName);
+  auto fs = vo::files::read(fsName);
+  if (vs.empty() || fs.empty()) { VO_ERR_FMT("Failed to open shaders '{}'!", name); }
+
+  // . Register if valid
+  mShaderModules.emplace(vsName, vku::shaders::createModule(mLogicalDevice, vs));
+  mShaderModules.emplace(fsName, vku::shaders::createModule(mLogicalDevice, fs));
+
+  // . Stage for vertex-shader
+  VkPipelineShaderStageCreateInfo vertShaderStageInfo {};
+  vertShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  vertShaderStageInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+  vertShaderStageInfo.module = mShaderModules.at(vsName);
+  vertShaderStageInfo.pName  = "main";  // Entrypoint function name
+
+  // . Stage for fragment-shader
+  VkPipelineShaderStageCreateInfo fragShaderStageInfo {};
+  fragShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  fragShaderStageInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+  fragShaderStageInfo.module = mShaderModules.at(fsName);
+  fragShaderStageInfo.pName  = "main";
+
+  // . Store
+  mPipelineShaderCreateInfos.emplace_back(vertShaderStageInfo);
+  mPipelineShaderCreateInfos.emplace_back(fragShaderStageInfo);
+}
 
 //-----------------------------------------------------------------------------
 

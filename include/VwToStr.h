@@ -4,20 +4,20 @@
 #include <unordered_map>
 #include <string_view>
 
-namespace vo
+namespace vku
 {
-inline static std::unordered_map<uint32_t, std::string_view> const VwToStr_DebugSeverity {
+inline static std::unordered_map<uint32_t, std::string_view> const ToStr_DebugSeverity {
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT, "Verbose" },
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT, "Info" },
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT, "Warning" },
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT, "Error" },
 };
-inline static std::unordered_map<uint32_t, std::string_view> const VwToStr_DebugType {
+inline static std::unordered_map<uint32_t, std::string_view> const ToStr_DebugType {
   { VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, "General" },
   { VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT, "Validation" },
   { VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT, "Performance" },
 };
-inline static std::unordered_map<uint32_t, std::string_view> const VwToStr_PresentMode {
+inline static std::unordered_map<uint32_t, std::string_view> const ToStr_PresentMode {
   { VK_PRESENT_MODE_IMMEDIATE_KHR, "VK_PRESENT_MODE_IMMEDIATE_KHR" },
   { VK_PRESENT_MODE_MAILBOX_KHR, "VK_PRESENT_MODE_MAILBOX_KHR" },
   { VK_PRESENT_MODE_FIFO_KHR, "VK_PRESENT_MODE_FIFO_KHR" },
@@ -26,7 +26,7 @@ inline static std::unordered_map<uint32_t, std::string_view> const VwToStr_Prese
   { VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR, "VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR" },
   { VK_PRESENT_MODE_MAX_ENUM_KHR, "VK_PRESENT_MODE_MAX_ENUM_KHR" },
 };
-inline static std::unordered_map<uint32_t, std::string_view> const VwToStr_Format {
+inline static std::unordered_map<uint32_t, std::string_view> const ToStr_Format {
   { VK_FORMAT_UNDEFINED, "VK_FORMAT_UNDEFINED" },
   { VK_FORMAT_R4G4_UNORM_PACK8, "VK_FORMAT_R4G4_UNORM_PACK8" },
   { VK_FORMAT_R4G4B4A4_UNORM_PACK16, "VK_FORMAT_R4G4B4A4_UNORM_PACK16" },
@@ -323,4 +323,4 @@ inline static std::unordered_map<uint32_t, std::string_view> const VwToStr_Forma
   { VK_FORMAT_MAX_ENUM, "VK_FORMAT_MAX_ENUM" },
 };
 
-}  // namespace vo
+}  // namespace vku

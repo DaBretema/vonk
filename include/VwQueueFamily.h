@@ -7,7 +7,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace vo
+namespace vku
 {
 //
 
@@ -55,4 +55,4 @@ private:
 
 //-----------------------------------------------
 
-}  // namespace vo
+}  // namespace vku

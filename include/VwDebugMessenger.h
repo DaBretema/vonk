@@ -1,7 +1,7 @@
 #pragma once
 #include "VwVulkan.h"
 
-namespace vo
+namespace vku
 {
 class DebugMessenger
 {
@@ -18,4 +18,4 @@ private:
   VkDebugUtilsMessengerCreateInfoEXT createInfo;
 };
 
-}  // namespace vo
+}  // namespace vku

@@ -4,7 +4,7 @@
 #include "Settings.h"
 #include "VwToStr.h"
 
-namespace vo
+namespace vku
 {
 static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugCallback(
   VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
@@ -16,8 +16,8 @@ static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugCallback(
     fmt::print(
       "\n VX - [{} / {} / {}] \n--------------------------------------------------\n{}\n",
       pUserData,
-      VwToStr_DebugSeverity.at(messageSeverity),
-      VwToStr_DebugType.at(messageType),
+      vku::ToStr_DebugSeverity.at(messageSeverity),
+      vku::ToStr_DebugType.at(messageType),
       pCallbackData->pMessage);
   }
 
@@ -59,4 +59,4 @@ void DebugMessenger::destroy(VkInstance const &instance)
 }
 
 //-----------------------------------------------
-}  // namespace vo
+}  // namespace vku

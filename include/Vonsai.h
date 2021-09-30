@@ -7,9 +7,11 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include "VwUtils.h"
+
 #include "VwQueueFamily.h"
 #include "VwDebugMessenger.h"
-#include "VwSwapChain.h"
+// #include "VwSwapChain.h"
 
 namespace vo
 {
@@ -54,15 +56,18 @@ private:
 
   VkDevice mLogicalDevice = VK_NULL_HANDLE;
 
-  vo::QueueFamily    mQueueFamilies {};
-  vo::DebugMessenger mDebugMessenger {};
+  vku::QueueFamily    mQueueFamilies {};
+  vku::DebugMessenger mDebugMessenger {};
 
   VkSurfaceKHR mSurface;
 
   VkSwapchainKHR           mSwapChain;
   std::vector<VkImage>     mSwapChainImages;
-  vo::SwapChainSettings    mSwapChainSettings;
+  vku::swapchain::Settings mSwapChainSettings;
   std::vector<VkImageView> mSwapChainImageViews;
+
+  std::unordered_map<std::string, VkShaderModule> mShaderModules;
+  std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderCreateInfos;
 
   // ::: Vulkan initialization
 
