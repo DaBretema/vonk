@@ -99,6 +99,16 @@ void Vonsai::initWindow()
 
 //-----------------------------------------------------------------------------
 
+void Vonsai::mainLoop()
+{
+  while (!glfwWindowShouldClose(mWindow)) {
+    glfwWaitEvents();
+    // glfwPollEvents();
+  }
+}
+
+//-----------------------------------------------------------------------------
+
 void Vonsai::initVulkan()
 {
   VO_TRACE(2, "Create Instance");
@@ -115,34 +125,34 @@ void Vonsai::initVulkan()
   createSwapChain();
   VO_TRACE(2, "Create Image-Views");
   createImageViews();
-}
-
-//-----------------------------------------------------------------------------
-
-void Vonsai::mainLoop()
-{
-  while (!glfwWindowShouldClose(mWindow)) {
-    glfwWaitEvents();
-    // glfwPollEvents();
-  }
+  VO_TRACE(2, "Create Graphics-Pipeline");
+  createGraphicsPipeline();
 }
 
 //-----------------------------------------------------------------------------
 
 void Vonsai::cleanup()
 {
+  // VO_TRACE(2, "Destroy Graphics-Pipeline");
+
   // . Logical Device
   // .. Dependencies
+  VO_TRACE(2, "Destroy Image-Views");
   for (auto imageView : mSwapChainImageViews) { vkDestroyImageView(mLogicalDevice, imageView, nullptr); }
+  VO_TRACE(2, "Destroy SWAP-CHAIN");
   vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
   // .. Itself
+  VO_TRACE(2, "Destroy Logical-Device");
   vkDestroyDevice(mLogicalDevice, nullptr);
 
   // . Instance
   // .. Dependencies
-  mDebugMessenger.destroy(mInstance);
+  VO_TRACE(2, "Destroy Surface");
   vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
+  VO_TRACE(2, "Destroy Debug-Callback");
+  mDebugMessenger.destroy(mInstance);
   // .. Itself
+  VO_TRACE(2, "Destroy Instance");
   vkDestroyInstance(mInstance, nullptr);
 
   //  // not using UniqeSwapchain to destroy in correct order - before the surface
@@ -442,6 +452,10 @@ void Vonsai::createImageViews()
     VW_CHECK(vkCreateImageView(mLogicalDevice, &createInfo, nullptr, &mSwapChainImageViews[i]));
   }
 }
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::createGraphicsPipeline() {}
 
 //-----------------------------------------------------------------------------
 

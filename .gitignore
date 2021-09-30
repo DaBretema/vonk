@@ -5,17 +5,20 @@
 
 # Only store files below (with ! before path/expression)
 
+!assets/
+!assets/**
+
 !include/
-!include/*
+!include/**
 
 !src/
-!src/*
+!src/**
 
 !test/
-!test/*
+!test/**
 
 !vendor/
-!vendor/*
+!vendor/**
 
 !.gitignore
 !.gitmodules

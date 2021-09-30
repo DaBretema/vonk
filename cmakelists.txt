@@ -9,15 +9,14 @@ set(CMAKE_MESSAGE_LOG_LEVEL "WARNING")
 set(pName Vonsai)
 project(${pName})
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+# set(CMAKE_CXX_STANDARD 20)
+# set(CMAKE_CXX_EXTENSIONS OFF)
+# set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Makefile and Ninja only
 
 set(CMAKE_CXX_FLAGS "")
 set(CMAKE_CXX_FLAGS_RELEASE "-Ofast")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wweak-vtables -fexceptions")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra")
 
 
 # ------------------------------------------------------------------------- #
@@ -30,7 +29,9 @@ set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 
 # VULKAN
-find_package(Vulkan REQUIRED)
+# find_package(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED COMPONENTS glslc)
+find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
 
 # ASSIMP
 ## Static?
@@ -55,40 +56,69 @@ add_subdirectory(vendor/glfw)
 set(pLibsIncl ${Vulkan_INCLUDE_DIRS})
 set(pLibs fmt glm glfw ${Vulkan_LIBRARIES})
 
-message(STATUS "V LibsIncl: ${Vulkan_INCLUDE_DIRS}")
-message(STATUS "V Libs: ${Vulkan_LIBRARIES}")
+
+# ------------------------------------------------------------------------- #
+# Shader compilation
+# ------------------------------------------------------------------------- #
+
+set(SHADERS_SOURCE_DIR "./assets/shaders")
+set(SHADERS_BINARY_DIR "./assets/shaders")
+
+file(GLOB SHADERS
+  ${SHADERS_SOURCE_DIR}/*.vert
+  ${SHADERS_SOURCE_DIR}/*.frag
+  ${SHADERS_SOURCE_DIR}/*.comp
+  ${SHADERS_SOURCE_DIR}/*.geom
+  ${SHADERS_SOURCE_DIR}/*.tesc
+  ${SHADERS_SOURCE_DIR}/*.tese
+#   ${SHADERS_SOURCE_DIR}/*.mesh
+#   ${SHADERS_SOURCE_DIR}/*.task
+#   ${SHADERS_SOURCE_DIR}/*.rgen
+#   ${SHADERS_SOURCE_DIR}/*.rchit
+#   ${SHADERS_SOURCE_DIR}/*.rmiss
+  )
+
+add_custom_command(
+  COMMAND
+    ${CMAKE_COMMAND} -E remove_directory ${SHADERS_BINARY_DIR}
+    ${CMAKE_COMMAND} -E make_directory ${SHADERS_BINARY_DIR}
+  OUTPUT ${SHADERS_BINARY_DIR}
+  COMMENT "Creating ${SHADERS_BINARY_DIR}"
+)
+
+foreach(source IN LISTS SHADERS)
+  get_filename_component(FILENAME ${source} NAME)
+  add_custom_command(
+    COMMAND
+      ${glslc_executable}
+      -o ${SHADERS_BINARY_DIR}/${FILENAME}.spv
+      ${source}
+    OUTPUT ${SHADERS_BINARY_DIR}/${FILENAME}.spv
+    DEPENDS ${source} ${SHADERS_BINARY_DIR}
+    COMMENT "Compiling ${FILENAME}"
+  )
+  list(APPEND SPV_SHADERS ${SHADERS_BINARY_DIR}/${FILENAME}.spv)
+endforeach()
+
+add_custom_target(shaders ALL DEPENDS ${SPV_SHADERS}) # Seems like unneeded
 
 
 # ------------------------------------------------------------------------- #
 # PROJECT
 # ------------------------------------------------------------------------- #
 
-add_library(${pName} STATIC
-./include/VwVulkan.h
+file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+file(GLOB HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
 
-./include/VwToStr.h
-# ./src/VwToStr.cpp
+add_library(${pName} STATIC ${SPV_SHADERS} ${SOURCE_FILES} ${HEADER_FILES})
 
-./include/VwDebugMessenger.h
-./src/VwDebugMessenger.cpp
-
-./include/VwQueueFamily.h
-./src/VwQueueFamily.cpp
-
-./include/VwSwapChain.h
-./src/VwSwapChain.cpp
-
-#---
-./include/Defines.h
-./include/Settings.h
-./include/Macros.h
-#---
-
-./include/Vonsai.h
-./src/Vonsai.cpp
+target_compile_features(${pName} PUBLIC
+    cxx_std_20
 )
+
 target_link_libraries(${pName} PRIVATE ${pLibs})
 target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLibsIncl})
+
 
 # ------------------------------------------------------------------------- #
 # EXE and TESTING
