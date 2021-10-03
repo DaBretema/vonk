@@ -67,7 +67,11 @@ private:
   std::vector<VkImageView> mSwapChainImageViews;
 
   std::unordered_map<std::string, VkShaderModule> mShaderModules;
-  std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderCreateInfos;
+  std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderStageCreateInfos;
+
+  VkRenderPass     mRenderPass;
+  VkPipelineLayout mPipelineLayout;
+  VkPipeline       mGraphicsPipeline;
 
   // ::: Vulkan initialization
 
@@ -77,6 +81,7 @@ private:
   void createLogicalDevice();
   void createSwapChain();
   void createImageViews();
+  void createRenderPass();
   void createGraphicsPipeline();
 };
 
