@@ -43,17 +43,17 @@ namespace vo
 #define VO_CHECK(conditionCode) \
   if (!conditionCode) { VO_ABORT(#conditionCode); }
 
-//
-// === LOGIC ABSTRACTION : PATHS
-//-----------------------------------------------------------------------------
+// //
+// // === LOGIC ABSTRACTION : PATHS
+// //-----------------------------------------------------------------------------
 
-auto const VO__INTERNAL__GET_SHADER_PATH = [](char const *shaderName, char const *extension) {
-  static auto const VwShadersPath = std::string("./assets/shaders/");
-  return VwShadersPath + shaderName + "." + extension + ".spv";
-};
-#define VO_GET_SHADER_PATH_VERT(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "vert")
-#define VO_GET_SHADER_PATH_FRAG(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "frag")
-#define VO_GET_SHADER_PATH_COMP(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "comp")
+// auto const VO__INTERNAL__GET_SHADER_PATH = [](char const *shaderName, char const *extension) {
+//   static auto const VwShadersPath = std::string("./assets/shaders/");
+//   return VwShadersPath + shaderName + "." + extension + ".spv";
+// };
+// #define VO_GET_SHADER_PATH_VERT(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "vert")
+// #define VO_GET_SHADER_PATH_FRAG(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "frag")
+// #define VO_GET_SHADER_PATH_COMP(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "comp")
 
 //
 // === VULKAN MACROS = VW_

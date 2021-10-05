@@ -102,10 +102,15 @@ void Vonsai::initWindow()
 
 void Vonsai::mainLoop()
 {
+  VO_TRACE(2, "Loop");
   while (!glfwWindowShouldClose(mWindow)) {
     glfwWaitEvents();
     // glfwPollEvents();
+
+    drawFrame();
   }
+  VO_TRACE(2, "Wait LogicalDevice");
+  vkDeviceWaitIdle(mLogicalDevice);
 }
 
 //-----------------------------------------------------------------------------
@@ -131,6 +136,78 @@ void Vonsai::initVulkan()
   createRenderPass();
   VO_TRACE(2, "Create Graphics-Pipeline");
   createGraphicsPipeline();
+  VO_TRACE(2, "Create Frame-Buffers");
+  createFramebuffers();
+  VO_TRACE(2, "Create Command Pool");
+  createCommandPool();
+  VO_TRACE(2, "Create Command Buffers");
+  createCommandBuffers();
+  VO_TRACE(2, "Create Sync Objects");
+  createSyncObjects();
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::drawFrame()
+{
+  size_t currFrame = 0;
+
+  // . Fence management
+  vkWaitForFences(mLogicalDevice, 1, &mInFlightFences[currFrame], VK_TRUE, UINT64_MAX);
+
+  // . Pick image
+  uint32_t imageIndex;
+  vkAcquireNextImageKHR(
+    mLogicalDevice,
+    mSwapChain,
+    UINT64_MAX,
+    mImageSemaphores[currFrame],
+    VK_NULL_HANDLE,
+    &imageIndex);
+
+  // .. Check if a previous frame is using this image (i.e. there is its fence to wait on)
+  if (mInFlightImages[imageIndex] != VK_NULL_HANDLE) {
+    vkWaitForFences(mLogicalDevice, 1, &mInFlightImages[imageIndex], VK_TRUE, UINT64_MAX);
+  }
+  // .. Mark the image as now being in use by this frame
+  mInFlightImages[imageIndex] = mInFlightFences[currFrame];
+
+  // . Submitting the command buffer
+  VkSubmitInfo submitInfo {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+  VkSemaphore          waitSemaphores[] = { mImageSemaphores[currFrame] };
+  VkPipelineStageFlags waitStages[]     = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+  submitInfo.waitSemaphoreCount         = 1;
+  submitInfo.pWaitSemaphores            = waitSemaphores;
+  submitInfo.pWaitDstStageMask          = waitStages;
+  submitInfo.commandBufferCount         = 1;
+  submitInfo.pCommandBuffers            = &mCommandBuffers[imageIndex];
+
+  VkSemaphore signalSemaphores[]  = { mRenderSempahores[currFrame] };
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores    = signalSemaphores;
+
+  vkResetFences(mLogicalDevice, 1, &mInFlightFences[currFrame]);
+  VW_CHECK(
+    vkQueueSubmit(mQueueFamilies.getQueueVal(vku::QueueType::graphics), 1, &submitInfo, mInFlightFences[currFrame]));
+
+  // . Presentation
+  VkPresentInfoKHR presentInfo {};
+  presentInfo.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+  presentInfo.waitSemaphoreCount = 1;
+  presentInfo.pWaitSemaphores    = signalSemaphores;
+
+  VkSwapchainKHR swapChains[] = { mSwapChain };
+  presentInfo.swapchainCount  = 1;
+  presentInfo.pSwapchains     = swapChains;
+  presentInfo.pImageIndices   = &imageIndex;
+  presentInfo.pResults        = nullptr;  // Optional
+
+  vkQueuePresentKHR(mQueueFamilies.getQueueVal(vku::QueueType::present), &presentInfo);
+
+  // . Iter flight-frame
+  currFrame = (currFrame + 1) % mMaxFlightFrames;
 }
 
 //-----------------------------------------------------------------------------
@@ -139,6 +216,16 @@ void Vonsai::cleanup()
 {
   // . Logical Device
   // .. Dependencies
+  VO_TRACE(2, "Destroy Sync Objects");
+  for (size_t i = 0; i < mMaxFlightFrames; i++) {
+    vkDestroySemaphore(mLogicalDevice, mImageSemaphores[i], nullptr);
+    vkDestroySemaphore(mLogicalDevice, mRenderSempahores[i], nullptr);
+    vkDestroyFence(mLogicalDevice, mInFlightFences[i], nullptr);
+  }
+  VO_TRACE(2, "Destroy Command Pool");
+  vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
+  VO_TRACE(2, "Destroy FrameBuffers");
+  for (auto framebuffer : mSwapChainFramebuffers) { vkDestroyFramebuffer(mLogicalDevice, framebuffer, nullptr); }
   VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Itself");
   vkDestroyPipeline(mLogicalDevice, mGraphicsPipeline, nullptr);
   VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Layout");
@@ -346,6 +433,7 @@ void Vonsai::createSwapChain()
   uint32_t w = static_cast<uint32_t>(iW), h = static_cast<uint32_t>(iH);
 
   mSwapChainSettings = vku::swapchain::getSettings(mPhysicalDevice, mSurface, vku::swapchain::Settings { { w, h } });
+  mMaxFlightFrames   = mSwapChainSettings.minImageCount;
 
 #if VO_VERBOSE
   mSwapChainSettings.dumpInfo();
@@ -421,6 +509,11 @@ void Vonsai::createSwapChain()
 
 void Vonsai::createImageViews()
 {
+  /*
+   * VkImageViewCreateInfo.viewType/.format fields specify how the image data should be interpreted.
+   * VkImageViewCreateInfo.viewType allows you to treat images as 1D textures, 2D textures, 3D textures and cube maps.
+   */
+
   mSwapChainImageViews.resize(mSwapChainImages.size());
 
   // . Create a image-view per image
@@ -428,11 +521,8 @@ void Vonsai::createImageViews()
   for (size_t i = 0; i < mSwapChainImages.size(); i++) {
     // .. [Create-Info] Swap-Chain
     VkImageViewCreateInfo createInfo {};
-    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    createInfo.image = mSwapChainImages[i];
-
-    // ... The viewType and format fields specify how the image data should be interpreted. The viewType parameter
-    // allows you to treat images as 1D textures, 2D textures, 3D textures and cube maps.
+    createInfo.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image    = mSwapChainImages[i];
     createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     createInfo.format   = mSwapChainSettings.surfaceFormat.format;
 
@@ -459,18 +549,30 @@ void Vonsai::createImageViews()
 
 void Vonsai::createRenderPass()
 {
+  /*
+   * VkAttachmentDescription.loadOp :
+       - VK_ATTACHMENT_LOAD_OP_LOAD      : Preserve the existing contents of the attachment.
+       - VK_ATTACHMENT_LOAD_OP_CLEAR     : Clear the values to a constant at the start.
+       - VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them.
+   * VkAttachmentDescription.storeOp :
+       - VK_ATTACHMENT_STORE_OP_STORE     : Rendered contents will be stored in memory and can be read later.
+       - VK_ATTACHMENT_STORE_OP_DONT_CARE : Contents of the framebuffer will be undefined after the rendering operation.
+
+   * Every subpass references one or more of the attachments using VkAttachmentReference. This allows attachment resuse
+   between render-subpasses.
+
+   * VkSubpassDescription.[...]
+       - pInputAttachments       : Attachments that are read from a shader.
+       - pDepthStencilAttachment : Attachment for depth and stencil data.
+       - pResolveAttachments     : Attachments used for multisampling color attachments.
+       - pPreserveAttachments    : Attachments that are not used by this subpass, but data must be preserved.
+   */
+
   // . Attachment
   VkAttachmentDescription colorAttachment {};
   colorAttachment.format  = mSwapChainSettings.surfaceFormat.format;
   colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;  // VK_SAMPLE_COUNT_1_BIT for No-Multisampling
-  // .. load ops
-  // - VK_ATTACHMENT_LOAD_OP_LOAD      : Preserve the existing contents of the attachment.
-  // - VK_ATTACHMENT_LOAD_OP_CLEAR     : Clear the values to a constant at the start.
-  // - VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them.
-  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  // .. store ops
-  // - VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later.
-  // - VK_ATTACHMENT_STORE_OP_DONT_CARE: Contents of the framebuffer will be undefined after the rendering operation.
+  colorAttachment.loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR;
   colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   // .. stencil
   colorAttachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -480,32 +582,34 @@ void Vonsai::createRenderPass()
   colorAttachment.finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
   // . Subpass
-
-  // .. Every subpass references one or more of the attachments that we've described using the structure in the previous
-  // sections. These references are themselves VkAttachmentReference
+  // .. References
   VkAttachmentReference colorAttachmentRef {};
   colorAttachmentRef.attachment = 0;
   colorAttachmentRef.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-  // .. Subpass description
+  // .. Description
   VkSubpassDescription subpass {};
   subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;  // also could be: Compute or Raytracing
   subpass.colorAttachmentCount = 1;
   subpass.pColorAttachments    = &colorAttachmentRef;
-  /*
-  The following other types of attachments can be referenced by a subpass:
-  - pInputAttachments: Attachments that are read from a shader
-  - pResolveAttachments: Attachments used for multisampling color attachments
-  - pDepthStencilAttachment: Attachment for depth and stencil data
-  - pPreserveAttachments: Attachments that are not used by this subpass, but for which the data must be preserved
-  */
 
+  // . [Create-Info] - RenderPass
   VkRenderPassCreateInfo renderPassInfo {};
   renderPassInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
   renderPassInfo.attachmentCount = 1;
   renderPassInfo.pAttachments    = &colorAttachment;
   renderPassInfo.subpassCount    = 1;
   renderPassInfo.pSubpasses      = &subpass;
+
+  // . Subpass dependencies (required for user-defined subpasses and 'implicit' ones)
+  VkSubpassDependency dependency {};
+  dependency.srcSubpass          = VK_SUBPASS_EXTERNAL;
+  dependency.dstSubpass          = 0;
+  dependency.srcStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  dependency.srcAccessMask       = 0;
+  dependency.dstStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  dependency.dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  renderPassInfo.dependencyCount = 1;
+  renderPassInfo.pDependencies   = &dependency;
 
   VW_CHECK(vkCreateRenderPass(mLogicalDevice, &renderPassInfo, nullptr, &mRenderPass));
 }
@@ -514,10 +618,15 @@ void Vonsai::createRenderPass()
 
 void Vonsai::createGraphicsPipeline()
 {
+  /*
+   * Maximum line width: Depends on the hardware and any line thicker than 1.0f requires you to enable the { wideLines }
+   * GPU feature.
+   */
+
   // . Get names
   auto const name   = "base";
-  auto const vsName = VO_GET_SHADER_PATH_VERT(name);
-  auto const fsName = VO_GET_SHADER_PATH_FRAG(name);
+  auto const vsName = vku::shaders::getPathVert(name);
+  auto const fsName = vku::shaders::getPathFrag(name);
 
   // . Read shader content
   auto vs = vo::files::read(vsName);
@@ -601,10 +710,7 @@ void Vonsai::createGraphicsPipeline()
   rasterizer.depthBiasConstantFactor = 0.0f;  // Optional
   rasterizer.depthBiasClamp          = 0.0f;  // Optional
   rasterizer.depthBiasSlopeFactor    = 0.0f;  // Optional
-
-  // .. The maximum line width that is supported depends on the hardware and any line thicker than 1.0f requires you to
-  // enable the {wideLines} GPU feature.
-  rasterizer.lineWidth = 1.0f;
+  rasterizer.lineWidth               = 1.0f;
 
   // . Multisampling : for now disabled
   VkPipelineMultisampleStateCreateInfo multisampling {};
@@ -689,14 +795,141 @@ void Vonsai::createGraphicsPipeline()
   pipelineInfo.pMultisampleState   = &multisampling;
   pipelineInfo.pDepthStencilState  = &depthStencil;  // Optional
   pipelineInfo.pColorBlendState    = &colorBlending;
-  pipelineInfo.pDynamicState       = &dynamicState;  // Optional
-  pipelineInfo.layout              = mPipelineLayout;
-  pipelineInfo.renderPass          = mRenderPass;
-  pipelineInfo.subpass             = 0;               // index of subpass (or first subpass, not sure yet...)
-  pipelineInfo.basePipelineHandle  = VK_NULL_HANDLE;  // Optional
-  pipelineInfo.basePipelineIndex   = -1;              // Optional
+  // pipelineInfo.pDynamicState       = &dynamicState;  // Optional
+  pipelineInfo.layout             = mPipelineLayout;
+  pipelineInfo.renderPass         = mRenderPass;
+  pipelineInfo.subpass            = 0;               // index of subpass (or first subpass, not sure yet...)
+  pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;  // Optional
+  pipelineInfo.basePipelineIndex  = -1;              // Optional
 
   VW_CHECK(vkCreateGraphicsPipelines(mLogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &mGraphicsPipeline));
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::createFramebuffers()
+{
+  /*
+  * VkFramebufferCreateInfo.attachmentCount could vary between techniques,
+      I mean this is the point where you define MRT right?
+      So i.e. for Deferred rendering here, we wil need something like 5 attachmentCount, previously created, for sure.
+  */
+
+  mSwapChainFramebuffers.resize(mSwapChainImageViews.size());
+
+  for (size_t i = 0; i < mSwapChainImageViews.size(); ++i) {
+    // . Get its VkImageView
+    VkImageView attachments[] = { mSwapChainImageViews[i] };
+
+    // . [Create-Info] - FrameBuffer
+    VkFramebufferCreateInfo framebufferInfo {};
+    framebufferInfo.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass      = mRenderPass;
+    framebufferInfo.attachmentCount = 1;
+    framebufferInfo.pAttachments    = attachments;
+    framebufferInfo.width           = mSwapChainSettings.extent2D.width;
+    framebufferInfo.height          = mSwapChainSettings.extent2D.height;
+    framebufferInfo.layers          = 1;
+
+    // . Creation
+    VW_CHECK(vkCreateFramebuffer(mLogicalDevice, &framebufferInfo, nullptr, &mSwapChainFramebuffers[i]));
+  }
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::createCommandPool()
+{
+  VkCommandPoolCreateInfo poolInfo {};
+  poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  poolInfo.queueFamilyIndex = mQueueFamilies.getIndexVal(vku::QueueType::graphics);
+  poolInfo.flags            = 0;  // Optional
+
+  VW_CHECK(vkCreateCommandPool(mLogicalDevice, &poolInfo, nullptr, &mCommandPool));
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::createCommandBuffers()
+{
+  /*
+  * The VkCommandBufferAllocateInfo.level parameter specifies:
+      - VK_COMMAND_BUFFER_LEVEL_PRIMARY:
+          [V] Submitted to a queue for execution.
+          [X] Called from other command buffers.
+      - VK_COMMAND_BUFFER_LEVEL_SECONDARY:
+          [V] Called from primary command buffers.
+          [X] Submitted directly.
+  */
+
+  // . Allocating command-buffers
+  mCommandBuffers.resize(mSwapChainFramebuffers.size());
+
+  VkCommandBufferAllocateInfo allocInfo {};
+  allocInfo.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.commandPool        = mCommandPool;
+  allocInfo.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandBufferCount = VW_SIZE_CAST(mCommandBuffers.size());
+
+  VW_CHECK(vkAllocateCommandBuffers(mLogicalDevice, &allocInfo, mCommandBuffers.data()));
+
+  // . Recording
+  VkClearValue const clearColor = { { { 0.0175f, 0.0f, 0.0175f, 1.0f } } };
+
+  for (size_t i = 0; i < mCommandBuffers.size(); ++i) {
+    VkCommandBufferBeginInfo beginInfo {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    // beginInfo.flags            = 0;        // Optional
+    beginInfo.flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+    beginInfo.pInheritanceInfo = nullptr;  // Optional
+
+    VW_CHECK(vkBeginCommandBuffer(mCommandBuffers[i], &beginInfo));
+
+    // .. Renderpass begin
+    VkRenderPassBeginInfo renderPassInfo {};
+    renderPassInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass        = mRenderPass;
+    renderPassInfo.framebuffer       = mSwapChainFramebuffers[i];
+    renderPassInfo.renderArea.offset = { 0, 0 };
+    renderPassInfo.renderArea.extent = mSwapChainSettings.extent2D;
+    renderPassInfo.clearValueCount   = 1;
+    renderPassInfo.pClearValues      = &clearColor;
+
+    vkCmdBeginRenderPass(mCommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(mCommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
+#if VO_HARDCODED_SHAPE == 0
+    vkCmdDraw(mCommandBuffers[i], 3, 1, 0, 0);
+#else
+    vkCmdDraw(mCommandBuffers[i], 6, 1, 0, 0);
+#endif
+    // vkCmdDrawIndexed(mCommandBuffers[i], 6, 1, 0, 3, 0);
+    vkCmdEndRenderPass(mCommandBuffers[i]);
+
+    VW_CHECK(vkEndCommandBuffer(mCommandBuffers[i]));
+  }
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::createSyncObjects()
+{
+  mImageSemaphores.resize(mMaxFlightFrames);
+  mRenderSempahores.resize(mMaxFlightFrames);
+  mInFlightFences.resize(mMaxFlightFrames);
+  mInFlightImages.resize(mSwapChainImages.size(), VK_NULL_HANDLE);
+
+  VkSemaphoreCreateInfo semaphoreInfo {};
+  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+  VkFenceCreateInfo fenceInfo {};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;  // Initialize on creation
+
+  for (size_t i = 0; i < mMaxFlightFrames; ++i) {
+    VW_CHECK(vkCreateSemaphore(mLogicalDevice, &semaphoreInfo, nullptr, &mImageSemaphores[i]));
+    VW_CHECK(vkCreateSemaphore(mLogicalDevice, &semaphoreInfo, nullptr, &mRenderSempahores[i]));
+    VW_CHECK(vkCreateFence(mLogicalDevice, &fenceInfo, nullptr, &mInFlightFences[i]));
+  }
 }
 
 //-----------------------------------------------------------------------------

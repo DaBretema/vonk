@@ -12,13 +12,19 @@ static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugCallback(
   const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
   MBU void *                                  pUserData)
 {
-  if (messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+  static std::unordered_map<int32_t, bool> cache {};
+  auto const                               ID = pCallbackData->messageIdNumber;
+
+  if (!cache[ID] && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
     fmt::print(
-      "\n VX - [{} / {} / {}] \n--------------------------------------------------\n{}\n",
-      pUserData,
+      "\n ❗️ [VALIDATION LAYERS] - {} at {}{}"
+      "\n--------------------------------------------------------------------------------\n{}\n",
       vku::ToStr_DebugSeverity.at(messageSeverity),
       vku::ToStr_DebugType.at(messageType),
+      pUserData ? fmt::format("- {}", pUserData) : std::string { "" },
       pCallbackData->pMessage);
+
+    cache[ID] = true;
   }
 
   return VK_FALSE;
