@@ -41,6 +41,92 @@ private:
 
   // ::: App flow
 
+  // struct VulkanInstance
+  // {
+  //   VkInstance handle = VK_NULL_HANDLE;
+
+  //   VkDebugUtilsMessengerEXT mDebugMessenger;
+
+  //   VkPhysicalDevice           mPhysicalDevice = VK_NULL_HANDLE;
+  //   VkPhysicalDeviceFeatures   mPhysicalDeviceFeatures;
+  //   VkPhysicalDeviceProperties mPhysicalDeviceProperties;
+
+  //   std::vector<std::optional<uint32_t>> mQueueFamilyIndices;
+
+  //   VkSurfaceKHR mSurface;
+  // };
+
+  // struct VulkanDevice
+  // {
+  //   VkDevice handle = VK_NULL_HANDLE;
+
+  //   VkQueue queueGraphics;
+  //   VkQueue queuePresent;
+
+  //   VkSwapchainKHR           mSwapChain    = VK_NULL_HANDLE;
+  //   VkSwapchainKHR           mOldSwapChain = VK_NULL_HANDLE;
+  //   std::vector<VkImage>     mSwapChainImages;
+  //   vku::swapchain::Settings mSwapChainSettings;
+  //   std::vector<VkImageView> mSwapChainImageViews;
+
+  //   std::unordered_map<std::string, VkShaderModule> mShaderModules;
+  //   std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderStageCreateInfos;
+
+  //   VkRenderPass     mRenderPass       = VK_NULL_HANDLE;  // This could grow, might be a std::vector<VkRenderPass>
+  //   VkPipelineLayout mPipelineLayout   = VK_NULL_HANDLE;  // ... std::vector<VkPipelineLayout> (???)
+  //   VkPipeline       mGraphicsPipeline = VK_NULL_HANDLE;  // ... std::vector<VkPipeline> (???)
+
+  //   std::vector<VkFramebuffer> mSwapChainFramebuffers;
+
+  //   VkCommandPool mCommandPool = VK_NULL_HANDLE;  // This have been meant to be one per thread,
+  //                                                 // so extract it to a pool of pools ?
+  //   std::vector<VkCommandBuffer> mCommandBuffers;
+
+  //   std::vector<VkSemaphore> mImageSemaphores;
+  //   std::vector<VkSemaphore> mRenderSempahores;
+  //   uint32_t                 mMaxFlightFrames;
+  //   std::vector<VkFence>     mInFlightFencesSubmit;
+  //   std::vector<VkFence>     mInFlightFencesAcquire;
+  // };
+
+  // clang-format off
+
+  // vo::window::...
+      // . glfwWaitEvents
+      // . glfwGetFramebufferSize
+      // . glfwGetRequiredInstanceExtensions
+      // . glfwCreateWindow
+      // . glfwCreateWindowSurface
+      // . glfwSetWindowUserPointer
+      // . glfwSetFramebufferSizeCallback
+
+  // vo::vulkan::...  ->>  DEFINE A STRUCT THAT CONTAIN THE VULKAN "STATE" TO SHARE BETWEEN HELPERS ???
+      // . getInstanceExtensions(); ->> Will imply a call to vo::window::getRequiredInstanceExtensions
+      // . getDeviceExtensions();
+      // . initInstance( VulkanInstance, VulkanDevice );
+          // .. createInstance ( VulkanInstance )
+          // .. vku::debugmessenger::create( vulkanInstance );  // NOW: mDebugMessenger.create(mInstance)
+          // .. createSurface( vulkanInstance )
+          // .. pickPhysicalDevice( vulkanInstance )
+          // .. createLogicalDevice( vulkanInstanceState, vulkanDeviceState )
+      // . initDevice( VulkanDevice );
+          // .. createSwapChain( vulkanDevice )
+          // .. createImageViews( vulkanDevice )
+          // .. createRenderPass( vulkanDevice )
+          // .. createShaders( vulkanDevice )
+          // .. createGraphicsPipeline( vulkanDevice )
+          // .. createFramebuffers( vulkanDevice )
+          // .. createCommandPool( vulkanDevice )
+          // .. createCommandBuffers( vulkanDevice )
+          // .. createSyncObjects( vulkanDevice )
+      // . OnEvents
+          // .. recreateSwapChain( vulkanDevice )  :  OnWindowResize, AfterAcquireChecks, AfterPresentChecks
+      // . Draw frame ( vulkanDevice )
+          // .. Is there a better way of manage create-info structures and
+          // swapchain-recreation conditions? (See 'OnEvents')
+      // . Clean up ( vulkanInstanceState, vulkanDevice )
+  // clang-format on
+
   void initWindow();
   void initVulkan();
   void mainLoop();
@@ -49,30 +135,8 @@ private:
 
   // ::: Vulkan variables
 
-  VkInstance mInstance = VK_NULL_HANDLE;
-
-  VkPhysicalDevice           mPhysicalDevice = VK_NULL_HANDLE;
-  VkPhysicalDeviceFeatures   mPhysicalDeviceFeatures;
-  VkPhysicalDeviceProperties mPhysicalDeviceProperties;
-
-  VkDevice mLogicalDevice = VK_NULL_HANDLE;
-
-  vku::QueueFamily    mQueueFamilies {};
-  vku::DebugMessenger mDebugMessenger {};
-
-  VkSurfaceKHR mSurface;
-
-  VkSwapchainKHR           mSwapChain    = VK_NULL_HANDLE;
-  VkSwapchainKHR           mOldSwapChain = VK_NULL_HANDLE;
-  std::vector<VkImage>     mSwapChainImages;
-  vku::swapchain::Settings mSwapChainSettings;
-  std::vector<VkImageView> mSwapChainImageViews;
-
-  std::unordered_map<std::string, VkShaderModule> mShaderModules;
-  std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderStageCreateInfos;
-
-  VkRenderPass     mRenderPass     = VK_NULL_HANDLE;
-  VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;
+  // ::: DEFAULTS
+  //-------------------------
 
   // . Input-State vertex
   VkPipelineVertexInputStateCreateInfo mVertexInputInfo {
@@ -90,20 +154,66 @@ private:
     .primitiveRestartEnable = VK_FALSE,
   };
 
-  VkPipeline mGraphicsPipeline = VK_NULL_HANDLE;
+  // Move this flag to static data in vo::window::framebufferResized
+  bool mFramebufferResized = false;
+
+  //-------------------------
+
+  //.
+  //.
+  //.
+
+  // ::: INSTANCE
+  //-------------------------
+  VkInstance mInstance = VK_NULL_HANDLE;
+
+  VkPhysicalDevice           mPhysicalDevice = VK_NULL_HANDLE;
+  VkPhysicalDeviceFeatures   mPhysicalDeviceFeatures;
+  VkPhysicalDeviceProperties mPhysicalDeviceProperties;
+
+  vku::QueueFamily    mQueueFamilies {};
+  vku::DebugMessenger mDebugMessenger {};
+
+  VkSurfaceKHR mSurface;
+  //-------------------------
+
+  //.
+  //.
+  //.
+
+  // ::: DEVICE
+  //-------------------------
+  VkDevice mLogicalDevice = VK_NULL_HANDLE;
+
+  VkSwapchainKHR           mSwapChain    = VK_NULL_HANDLE;
+  VkSwapchainKHR           mOldSwapChain = VK_NULL_HANDLE;
+  std::vector<VkImage>     mSwapChainImages;
+  vku::swapchain::Settings mSwapChainSettings;
+  std::vector<VkImageView> mSwapChainImageViews;
+
+  std::unordered_map<std::string, VkShaderModule> mShaderModules;
+  std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderStageCreateInfos;
+
+  VkRenderPass     mRenderPass     = VK_NULL_HANDLE;  // This could grow, might be a std::vector<VkRenderPass>
+  VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;  // This could grow, might be a std::vector<VkPipelineLayout> (??)
+  VkPipeline       mGraphicsPipeline = VK_NULL_HANDLE;  // This could grow, might be a std::vector<VkPipeline> (??)
 
   std::vector<VkFramebuffer> mSwapChainFramebuffers;
 
-  VkCommandPool                mCommandPool = VK_NULL_HANDLE;
+  VkCommandPool mCommandPool = VK_NULL_HANDLE;  // This have been meant to be one per thread,
+                                                // so extract it to a pool of pools ?
   std::vector<VkCommandBuffer> mCommandBuffers;
 
   std::vector<VkSemaphore> mImageSemaphores;
   std::vector<VkSemaphore> mRenderSempahores;
   uint32_t                 mMaxFlightFrames;
-  std::vector<VkFence>     mInFlightFences;
-  std::vector<VkFence>     mInFlightImages;
+  std::vector<VkFence>     mInFlightFencesSubmit;
+  std::vector<VkFence>     mInFlightFencesAcquire;
+  //-------------------------
 
-  bool mFramebufferResized = false;
+  //.
+  //.
+  //.
 
   // ::: Vulkan initialization
 

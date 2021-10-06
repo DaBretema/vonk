@@ -99,7 +99,6 @@ void Vonsai::initWindow()
   mWindow = glfwCreateWindow(mW, mH, mTitle.c_str(), nullptr, nullptr);
   if (!mWindow) { VO_ABORT("Couldn't create a window with GLFW"); }
   VO_TRACE(3, PtrStr(mWindow));
-  VO_TRACE(4, "Prueba de como se ve el nivel 4");
   glfwSetWindowUserPointer(mWindow, this);
 
   // [] CALLBACKS SETUP ...
@@ -185,7 +184,7 @@ void Vonsai::initVulkan()
   for (size_t i = 0; i < mMaxFlightFrames; i++) {
     VO_TRACE(3, fmt::format("Image Semaphore  : {}", PtrStr(mImageSemaphores[i])));
     VO_TRACE(3, fmt::format("Render Semaphore : {}", PtrStr(mRenderSempahores[i])));
-    VO_TRACE(3, fmt::format("InFlight Fences  : {}", PtrStr(mInFlightFences[i])));
+    VO_TRACE(3, fmt::format("InFlight Fences  : {}", PtrStr(mInFlightFencesSubmit[i])));
   }
 }
 
@@ -196,7 +195,7 @@ void Vonsai::drawFrame()
   size_t currFrame = 0;
 
   // . Fence management
-  vkWaitForFences(mLogicalDevice, 1, &mInFlightFences[currFrame], VK_TRUE, UINT64_MAX);
+  vkWaitForFences(mLogicalDevice, 1, &mInFlightFencesSubmit[currFrame], VK_TRUE, UINT64_MAX);
 
   // . Acquiere next image
   uint32_t   imageIndex;
@@ -217,11 +216,11 @@ void Vonsai::drawFrame()
   }
 
   // .. Check if a previous frame is using this image (i.e. there is its fence to wait on)
-  if (mInFlightImages[imageIndex] != VK_NULL_HANDLE) {
-    vkWaitForFences(mLogicalDevice, 1, &mInFlightImages[imageIndex], VK_TRUE, UINT64_MAX);
+  if (mInFlightFencesAcquire[imageIndex] != VK_NULL_HANDLE) {
+    vkWaitForFences(mLogicalDevice, 1, &mInFlightFencesAcquire[imageIndex], VK_TRUE, UINT64_MAX);
   }
   // .. Mark the image as now being in use by this frame
-  mInFlightImages[imageIndex] = mInFlightFences[currFrame];
+  mInFlightFencesAcquire[imageIndex] = mInFlightFencesSubmit[currFrame];
 
   // . Submitting the command buffer
   VkSubmitInfo submitInfo {};
@@ -239,9 +238,12 @@ void Vonsai::drawFrame()
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores    = signalSemaphores;
 
-  vkResetFences(mLogicalDevice, 1, &mInFlightFences[currFrame]);
-  VW_CHECK(
-    vkQueueSubmit(mQueueFamilies.getQueueVal(vku::QueueType::graphics), 1, &submitInfo, mInFlightFences[currFrame]));
+  vkResetFences(mLogicalDevice, 1, &mInFlightFencesSubmit[currFrame]);
+  VW_CHECK(vkQueueSubmit(
+    mQueueFamilies.getQueueVal(vku::QueueType::graphics),
+    1,
+    &submitInfo,
+    mInFlightFencesSubmit[currFrame]));
 
   // . Presentation
   VkPresentInfoKHR presentInfo {};
@@ -284,8 +286,8 @@ void Vonsai::cleanup()
     vkDestroySemaphore(mLogicalDevice, mImageSemaphores[i], nullptr);
     VO_TRACE(3, fmt::format("Render Semaphore : {}", PtrStr(mRenderSempahores[i])));
     vkDestroySemaphore(mLogicalDevice, mRenderSempahores[i], nullptr);
-    VO_TRACE(3, fmt::format("InFlight Fences  : {}", PtrStr(mInFlightFences[i])));
-    vkDestroyFence(mLogicalDevice, mInFlightFences[i], nullptr);
+    VO_TRACE(3, fmt::format("InFlight Fences  : {}", PtrStr(mInFlightFencesSubmit[i])));
+    vkDestroyFence(mLogicalDevice, mInFlightFencesSubmit[i], nullptr);
   }
 
   VO_TRACE(2, "Destroy Command-Pool");
@@ -954,8 +956,8 @@ void Vonsai::createSyncObjects()
 {
   mImageSemaphores.resize(mMaxFlightFrames);
   mRenderSempahores.resize(mMaxFlightFrames);
-  mInFlightFences.resize(mMaxFlightFrames);
-  mInFlightImages.resize(mSwapChainImages.size(), VK_NULL_HANDLE);
+  mInFlightFencesSubmit.resize(mMaxFlightFrames);
+  mInFlightFencesAcquire.resize(mSwapChainImages.size(), VK_NULL_HANDLE);
 
   VkSemaphoreCreateInfo semaphoreInfo {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -967,7 +969,7 @@ void Vonsai::createSyncObjects()
   for (size_t i = 0; i < mMaxFlightFrames; ++i) {
     VW_CHECK(vkCreateSemaphore(mLogicalDevice, &semaphoreInfo, nullptr, &mImageSemaphores[i]));
     VW_CHECK(vkCreateSemaphore(mLogicalDevice, &semaphoreInfo, nullptr, &mRenderSempahores[i]));
-    VW_CHECK(vkCreateFence(mLogicalDevice, &fenceInfo, nullptr, &mInFlightFences[i]));
+    VW_CHECK(vkCreateFence(mLogicalDevice, &fenceInfo, nullptr, &mInFlightFencesSubmit[i]));
   }
 }
 
