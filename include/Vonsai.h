@@ -62,7 +62,7 @@ private:
 
   VkSurfaceKHR mSurface;
 
-  VkSwapchainKHR           mSwapChain;
+  VkSwapchainKHR           mSwapChain = VK_NULL_HANDLE;
   std::vector<VkImage>     mSwapChainImages;
   vku::swapchain::Settings mSwapChainSettings;
   std::vector<VkImageView> mSwapChainImageViews;
@@ -70,13 +70,13 @@ private:
   std::unordered_map<std::string, VkShaderModule> mShaderModules;
   std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderStageCreateInfos;
 
-  VkRenderPass     mRenderPass;
-  VkPipelineLayout mPipelineLayout;
-  VkPipeline       mGraphicsPipeline;
+  VkRenderPass     mRenderPass       = VK_NULL_HANDLE;
+  VkPipelineLayout mPipelineLayout   = VK_NULL_HANDLE;
+  VkPipeline       mGraphicsPipeline = VK_NULL_HANDLE;
 
   std::vector<VkFramebuffer> mSwapChainFramebuffers;
 
-  VkCommandPool                mCommandPool;
+  VkCommandPool                mCommandPool = VK_NULL_HANDLE;
   std::vector<VkCommandBuffer> mCommandBuffers;
 
   std::vector<VkSemaphore> mImageSemaphores;
@@ -84,6 +84,8 @@ private:
   uint32_t                 mMaxFlightFrames;
   std::vector<VkFence>     mInFlightFences;
   std::vector<VkFence>     mInFlightImages;
+
+  bool r = false;
 
   // ::: Vulkan initialization
 
@@ -99,6 +101,8 @@ private:
   void createCommandPool();
   void createCommandBuffers();
   void createSyncObjects();
+  void recreateSwapChain();
+  void cleanupSwapChain();
 
   //
 };

@@ -94,8 +94,13 @@ void Vonsai::initWindow()
 
   VO_TRACE(2, "GLFW Create Window");
   mWindow = glfwCreateWindow(mW, mH, mTitle.c_str(), nullptr, nullptr);
+  glfwSetWindowUserPointer(mWindow, this);
 
   // [] CALLBACKS SETUP ...
+  glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow *window, int w, int h) {
+    auto app = reinterpret_cast<Vonsai *>(glfwGetWindowUserPointer(window));
+    app->mFramebufferResized;
+  });
 }
 
 //-----------------------------------------------------------------------------
@@ -155,15 +160,23 @@ void Vonsai::drawFrame()
   // . Fence management
   vkWaitForFences(mLogicalDevice, 1, &mInFlightFences[currFrame], VK_TRUE, UINT64_MAX);
 
-  // . Pick image
-  uint32_t imageIndex;
-  vkAcquireNextImageKHR(
+  // . Acquiere next image
+  uint32_t   imageIndex;
+  auto const acquireRet = vkAcquireNextImageKHR(
     mLogicalDevice,
     mSwapChain,
     UINT64_MAX,
     mImageSemaphores[currFrame],
     VK_NULL_HANDLE,
     &imageIndex);
+
+  // .. Validate the SwapChain
+  if (acquireRet == VK_ERROR_OUT_OF_DATE_KHR) {
+    recreateSwapChain();
+    return;
+  } else if (acquireRet != VK_SUCCESS && acquireRet != VK_SUBOPTIMAL_KHR) {
+    VO_ERR("Failed to acquire swap chain image!");
+  }
 
   // .. Check if a previous frame is using this image (i.e. there is its fence to wait on)
   if (mInFlightImages[imageIndex] != VK_NULL_HANDLE) {
@@ -204,7 +217,12 @@ void Vonsai::drawFrame()
   presentInfo.pImageIndices   = &imageIndex;
   presentInfo.pResults        = nullptr;  // Optional
 
-  vkQueuePresentKHR(mQueueFamilies.getQueueVal(vku::QueueType::present), &presentInfo);
+  auto const presentRet = vkQueuePresentKHR(mQueueFamilies.getQueueVal(vku::QueueType::present), &presentInfo);
+  if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR) {
+    recreateSwapChain();
+  } else if (presentRet != VK_SUCCESS) {
+    VO_ERR("Failed to present swap chain image!");
+  }
 
   // . Iter flight-frame
   currFrame = (currFrame + 1) % mMaxFlightFrames;
@@ -214,6 +232,9 @@ void Vonsai::drawFrame()
 
 void Vonsai::cleanup()
 {
+  // . Swap-Chain
+  cleanupSwapChain();
+
   // . Logical Device
   // .. Dependencies
   VO_TRACE(2, "Destroy Sync Objects");
@@ -222,32 +243,23 @@ void Vonsai::cleanup()
     vkDestroySemaphore(mLogicalDevice, mRenderSempahores[i], nullptr);
     vkDestroyFence(mLogicalDevice, mInFlightFences[i], nullptr);
   }
-  VO_TRACE(2, "Destroy Command Pool");
+  VO_TRACE(2, "Destroy Command-Pool");
   vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
-  VO_TRACE(2, "Destroy FrameBuffers");
-  for (auto framebuffer : mSwapChainFramebuffers) { vkDestroyFramebuffer(mLogicalDevice, framebuffer, nullptr); }
-  VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Itself");
-  vkDestroyPipeline(mLogicalDevice, mGraphicsPipeline, nullptr);
-  VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Layout");
-  vkDestroyPipelineLayout(mLogicalDevice, mPipelineLayout, nullptr);
-  VO_TRACE(2, "Destroy Graphics-Pipeline : Render Pass");
-  vkDestroyRenderPass(mLogicalDevice, mRenderPass, nullptr);  // after: mPipelineLayout
+
+  VO_TRACE(2, "Destroy Shader-Modules");
   for (auto [name, shaderModule] : mShaderModules) { vkDestroyShaderModule(mLogicalDevice, shaderModule, nullptr); }
-  VO_TRACE(2, "Destroy Image-Views");
-  for (auto imageView : mSwapChainImageViews) { vkDestroyImageView(mLogicalDevice, imageView, nullptr); }
-  VO_TRACE(2, "Destroy SWAP-CHAIN");
-  vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
+
   // .. Itself
   VO_TRACE(2, "Destroy Logical-Device");
   vkDestroyDevice(mLogicalDevice, nullptr);
 
   // . Instance
   // .. Dependencies
-  VO_TRACE(2, "Destroy Surface");
-  vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
   VO_TRACE(2, "Destroy Debug-Callback");
   // vku::debugmessenger::destroy(mInstance, mDebugMessenger);
   mDebugMessenger.destroy(mInstance);
+  VO_TRACE(2, "Destroy Surface");
+  vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
   // .. Itself
   VO_TRACE(2, "Destroy Instance");
   vkDestroyInstance(mInstance, nullptr);
@@ -930,6 +942,52 @@ void Vonsai::createSyncObjects()
     VW_CHECK(vkCreateSemaphore(mLogicalDevice, &semaphoreInfo, nullptr, &mRenderSempahores[i]));
     VW_CHECK(vkCreateFence(mLogicalDevice, &fenceInfo, nullptr, &mInFlightFences[i]));
   }
+}
+
+//-----------------------------------------------------------------------------
+
+void Vonsai::cleanupSwapChain()
+{
+  VO_TRACE(2, "Destroy FrameBuffers");
+  for (auto framebuffer : mSwapChainFramebuffers) { vkDestroyFramebuffer(mLogicalDevice, framebuffer, nullptr); }
+  VO_TRACE(2, "Free CommandBuffers");
+  vkFreeCommandBuffers(mLogicalDevice, mCommandPool, VW_SIZE_CAST(mCommandBuffers.size()), mCommandBuffers.data());
+  VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Itself");
+  vkDestroyPipeline(mLogicalDevice, mGraphicsPipeline, nullptr);
+  VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Layout");
+  vkDestroyPipelineLayout(mLogicalDevice, mPipelineLayout, nullptr);
+  VO_TRACE(2, "Destroy Graphics-Pipeline : Render Pass");
+  vkDestroyRenderPass(mLogicalDevice, mRenderPass, nullptr);  // after: mPipelineLayout
+  VO_TRACE(2, "Destroy Image-Views");
+  for (auto imageView : mSwapChainImageViews) { vkDestroyImageView(mLogicalDevice, imageView, nullptr); }
+  VO_TRACE(2, "Destroy SWAP-CHAIN");
+  vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
+}
+
+//-----------------------------------------------
+
+void Vonsai::recreateSwapChain()
+{
+  // ::: Handle window minimization
+  //---
+  int w = 0, h = 0;
+  glfwGetFramebufferSize(mWindow, &w, &h);
+  while (w == 0 || h == 0) {
+    glfwGetFramebufferSize(mWindow, &w, &h);
+    glfwWaitEvents();
+  }
+  //---
+
+  vkDeviceWaitIdle(mLogicalDevice);
+
+  cleanupSwapChain();
+
+  createSwapChain();
+  createImageViews();
+  createRenderPass();
+  createGraphicsPipeline();
+  createFramebuffers();
+  createCommandBuffers();
 }
 
 //-----------------------------------------------------------------------------
