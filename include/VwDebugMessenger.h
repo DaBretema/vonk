@@ -11,6 +11,7 @@ public:
   void create(VkInstance const &instance);
   void destroy(VkInstance const &instance);
 
+  VkDebugUtilsMessengerEXT                  getHandle() { return debugMessenger; }
   VkDebugUtilsMessengerCreateInfoEXT const *getCreateInfo() { return &createInfo; }
 
 private:

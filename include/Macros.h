@@ -11,12 +11,27 @@ namespace vo
 
 // ::: Mark argunment as unused to avoid warnings
 #define MBU [[maybe_unused]]
+static inline auto const PtrStr = [](auto *p) { return fmt::format("{}", fmt::ptr(p)); };
 
 //
 // === PRINTERS
 //-----------------------------------------------------------------------------
 #ifndef NDEBUG
-#  define VO_TRACE(lvl, msg) fmt::print("{} {}\n", std::string(lvl, '>'), msg)
+static inline auto const VO_TRACE = [](int lvl, auto msg) {
+  std::string const beginLineJumps = lvl < 2 ? "\n\n" : lvl < 3 ? "\n" : "";
+
+  std::string const byLevelSep  = std::string(4 * (lvl - 1), ' ');
+  std::string const byLevelMark = lvl < 2 ? "### " : lvl < 3 ? ">> " : lvl < 4 ? "* " : "- ";
+  // std::string const byLevelMark = std::string(lvl, '>') + ' ';
+
+  size_t            textSize       = std::string(msg).size() + byLevelMark.size();
+  std::string const byLevelSubLine = lvl < 3 ? std::string(textSize, '-') + "\n" : "";
+
+  std::string const message = byLevelSep + byLevelMark + msg;
+  std::string const subLine = "\n" + (lvl < 3 ? byLevelSep : "") + byLevelSubLine;
+
+  fmt::print("{}{}{}", beginLineJumps, message, subLine);
+};
 #  if VO_FUNCTION_LINE_LOG
 #    define VO_INFO(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
 #    define VO_ERR(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
@@ -26,6 +41,8 @@ namespace vo
 #    define VO_ERR(msg)  fmt::print("⚠️  {}\n", msg)
 #  endif
 #else
+#  define VO_INFO(msg) fmt::print("ℹ️  {}\n", msg)
+#  define VO_ERR(msg)  fmt::print("⚠️  {}\n", msg)
 #  define VO_TRACE(s)
 #endif
 

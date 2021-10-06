@@ -85,7 +85,7 @@ private:
   std::vector<VkFence>     mInFlightFences;
   std::vector<VkFence>     mInFlightImages;
 
-  bool r = false;
+  bool mFramebufferResized = false;
 
   // ::: Vulkan initialization
 

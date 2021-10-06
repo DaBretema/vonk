@@ -73,10 +73,13 @@ void Vonsai::run()
 {
   VO_TRACE(1, "INIT WINDOW");
   initWindow();
+
   VO_TRACE(1, "INIT VULKAN");
   initVulkan();
+
   VO_TRACE(1, "MAIN LOOP");
   mainLoop();
+
   VO_TRACE(1, "CLEAN UP");
   cleanup();
 }
@@ -87,19 +90,22 @@ void Vonsai::run()
 
 void Vonsai::initWindow()
 {
-  VO_TRACE(2, "GLFW Init");
+  VO_TRACE(2, "Initialize GLFW");
   VO_CHECK(glfwInit());
-  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);    // Resize windows takes special care
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);     // Resize windows takes special care
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
 
-  VO_TRACE(2, "GLFW Create Window");
+  VO_TRACE(2, "Create Window With GLFW");
   mWindow = glfwCreateWindow(mW, mH, mTitle.c_str(), nullptr, nullptr);
+  if (!mWindow) { VO_ABORT("Couldn't create a window with GLFW"); }
+  VO_TRACE(3, PtrStr(mWindow));
+  VO_TRACE(4, "Prueba de como se ve el nivel 4");
   glfwSetWindowUserPointer(mWindow, this);
 
   // [] CALLBACKS SETUP ...
-  glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow *window, int w, int h) {
-    auto app = reinterpret_cast<Vonsai *>(glfwGetWindowUserPointer(window));
-    app->mFramebufferResized;
+  glfwSetFramebufferSizeCallback(mWindow, [](GLFWwindow *window, MBU int w, MBU int h) {
+    auto app                 = reinterpret_cast<Vonsai *>(glfwGetWindowUserPointer(window));
+    app->mFramebufferResized = true;
   });
 }
 
@@ -109,11 +115,10 @@ void Vonsai::mainLoop()
 {
   VO_TRACE(2, "Loop");
   while (!glfwWindowShouldClose(mWindow)) {
-    glfwWaitEvents();
-    // glfwPollEvents();
-
+    glfwWaitEvents();  // glfwPollEvents();
     drawFrame();
   }
+
   VO_TRACE(2, "Wait LogicalDevice");
   vkDeviceWaitIdle(mLogicalDevice);
 }
@@ -124,31 +129,61 @@ void Vonsai::initVulkan()
 {
   VO_TRACE(2, "Create Instance");
   createInstance();
+  VO_TRACE(3, PtrStr(mInstance));
+
   VO_TRACE(2, "Setup Debug callback");
   // vku::debugmessenger::create(mInstance, &??mDebugMessenger);
   mDebugMessenger.create(mInstance);
+  VO_TRACE(3, PtrStr(mDebugMessenger.getHandle()));
+
   VO_TRACE(2, "Create Surface from window");
   createSurface();
+  VO_TRACE(3, PtrStr(mSurface));
+
   VO_TRACE(2, "Pick Physical-Device");
   pickPhysicalDevice();
+  VO_TRACE(3, PtrStr(mPhysicalDevice));
+
   VO_TRACE(2, "Create Logical-Device");
   createLogicalDevice();
+  VO_TRACE(3, PtrStr(mLogicalDevice));
+
   VO_TRACE(2, "Create SWAP-CHAIN");
   createSwapChain();
+  VO_TRACE(3, PtrStr(mSwapChain));
+
   VO_TRACE(2, "Create Image-Views");
   createImageViews();
+  for (auto imageView : mSwapChainImageViews) { VO_TRACE(3, PtrStr(imageView)); }
+
   VO_TRACE(2, "Create RenderPass");
   createRenderPass();
+  VO_TRACE(3, PtrStr(mRenderPass));
+
   VO_TRACE(2, "Create Graphics-Pipeline");
   createGraphicsPipeline();
+  VO_TRACE(3, PtrStr(mGraphicsPipeline));
+  for (auto [_, shaderModule] : mShaderModules) { VO_TRACE(3, PtrStr(shaderModule)); }
+
   VO_TRACE(2, "Create Frame-Buffers");
   createFramebuffers();
+  for (auto frameBuffer : mSwapChainFramebuffers) { VO_TRACE(3, PtrStr(frameBuffer)); }
+
   VO_TRACE(2, "Create Command Pool");
   createCommandPool();
+  VO_TRACE(3, PtrStr(mCommandPool));
+
   VO_TRACE(2, "Create Command Buffers");
   createCommandBuffers();
+  for (auto commadBuffer : mCommandBuffers) { VO_TRACE(3, PtrStr(commadBuffer)); }
+
   VO_TRACE(2, "Create Sync Objects");
   createSyncObjects();
+  for (size_t i = 0; i < mMaxFlightFrames; i++) {
+    VO_TRACE(3, fmt::format("Image Semaphore  : {}", PtrStr(mImageSemaphores[i])));
+    VO_TRACE(3, fmt::format("Render Semaphore : {}", PtrStr(mRenderSempahores[i])));
+    VO_TRACE(3, fmt::format("InFlight Fences  : {}", PtrStr(mInFlightFences[i])));
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -239,32 +274,46 @@ void Vonsai::cleanup()
   // .. Dependencies
   VO_TRACE(2, "Destroy Sync Objects");
   for (size_t i = 0; i < mMaxFlightFrames; i++) {
+    VO_TRACE(3, fmt::format("Image Semaphore  : {}", PtrStr(mImageSemaphores[i])));
     vkDestroySemaphore(mLogicalDevice, mImageSemaphores[i], nullptr);
+    VO_TRACE(3, fmt::format("Render Semaphore : {}", PtrStr(mRenderSempahores[i])));
     vkDestroySemaphore(mLogicalDevice, mRenderSempahores[i], nullptr);
+    VO_TRACE(3, fmt::format("InFlight Fences  : {}", PtrStr(mInFlightFences[i])));
     vkDestroyFence(mLogicalDevice, mInFlightFences[i], nullptr);
   }
+
   VO_TRACE(2, "Destroy Command-Pool");
+  VO_TRACE(3, PtrStr(mCommandPool));
   vkDestroyCommandPool(mLogicalDevice, mCommandPool, nullptr);
 
   VO_TRACE(2, "Destroy Shader-Modules");
-  for (auto [name, shaderModule] : mShaderModules) { vkDestroyShaderModule(mLogicalDevice, shaderModule, nullptr); }
+  for (auto [name, shaderModule] : mShaderModules) {
+    VO_TRACE(3, PtrStr(shaderModule));
+    vkDestroyShaderModule(mLogicalDevice, shaderModule, nullptr);
+  }
 
   // .. Itself
   VO_TRACE(2, "Destroy Logical-Device");
+  VO_TRACE(3, PtrStr(mLogicalDevice));
   vkDestroyDevice(mLogicalDevice, nullptr);
 
   // . Instance
   // .. Dependencies
   VO_TRACE(2, "Destroy Debug-Callback");
   // vku::debugmessenger::destroy(mInstance, mDebugMessenger);
+  VO_TRACE(3, PtrStr(mDebugMessenger.getHandle()));
   mDebugMessenger.destroy(mInstance);
   VO_TRACE(2, "Destroy Surface");
+  VO_TRACE(3, PtrStr(mSurface));
   vkDestroySurfaceKHR(mInstance, mSurface, nullptr);
   // .. Itself
   VO_TRACE(2, "Destroy Instance");
+  VO_TRACE(3, PtrStr(mInstance));
   vkDestroyInstance(mInstance, nullptr);
 
   // . Window
+  VO_TRACE(2, "Destroy Window");
+  VO_TRACE(3, PtrStr(mWindow));
   glfwDestroyWindow(mWindow);
   glfwTerminate();
 }
@@ -506,6 +555,13 @@ void Vonsai::createSwapChain()
   // because the window was resized. In that case the swap chain actually needs to be recreated from scratch and a
   // reference to the old one must be specified in this field.
   createInfo.oldSwapchain = VK_NULL_HANDLE;
+  // createInfo.oldSwapchain = mSwapChain;  // @DANI this is the right way
+
+  // if (mSwapChain != VK_NULL_HANDLE) {
+  //   VO_TRACE(2, "Destroy SWAP-CHAIN");
+  //   VO_TRACE(3, PtrStr(mSwapChain));
+  //   vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
+  // }
 
   // . Creation
   VW_CHECK(vkCreateSwapchainKHR(mLogicalDevice, &createInfo, nullptr, &mSwapChain));
@@ -949,18 +1005,34 @@ void Vonsai::createSyncObjects()
 void Vonsai::cleanupSwapChain()
 {
   VO_TRACE(2, "Destroy FrameBuffers");
-  for (auto framebuffer : mSwapChainFramebuffers) { vkDestroyFramebuffer(mLogicalDevice, framebuffer, nullptr); }
+  for (auto framebuffer : mSwapChainFramebuffers) {
+    VO_TRACE(3, PtrStr(framebuffer));
+    vkDestroyFramebuffer(mLogicalDevice, framebuffer, nullptr);
+  }
+
   VO_TRACE(2, "Free CommandBuffers");
   vkFreeCommandBuffers(mLogicalDevice, mCommandPool, VW_SIZE_CAST(mCommandBuffers.size()), mCommandBuffers.data());
+
   VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Itself");
+  VO_TRACE(3, PtrStr(mGraphicsPipeline));
   vkDestroyPipeline(mLogicalDevice, mGraphicsPipeline, nullptr);
+
   VO_TRACE(2, "Destroy Graphics-Pipeline : Pipeline Layout");
+  VO_TRACE(3, PtrStr(mPipelineLayout));
   vkDestroyPipelineLayout(mLogicalDevice, mPipelineLayout, nullptr);
+
   VO_TRACE(2, "Destroy Graphics-Pipeline : Render Pass");
+  VO_TRACE(3, PtrStr(mRenderPass));
   vkDestroyRenderPass(mLogicalDevice, mRenderPass, nullptr);  // after: mPipelineLayout
+
   VO_TRACE(2, "Destroy Image-Views");
-  for (auto imageView : mSwapChainImageViews) { vkDestroyImageView(mLogicalDevice, imageView, nullptr); }
+  for (auto imageView : mSwapChainImageViews) {
+    VO_TRACE(3, PtrStr(imageView));
+    vkDestroyImageView(mLogicalDevice, imageView, nullptr);
+  }
+
   VO_TRACE(2, "Destroy SWAP-CHAIN");
+  VO_TRACE(3, PtrStr(mSwapChain));
   vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
 }
 
@@ -968,6 +1040,8 @@ void Vonsai::cleanupSwapChain()
 
 void Vonsai::recreateSwapChain()
 {
+  VO_TRACE(1, "Re-Create SWAP-CHAIN");
+
   // ::: Handle window minimization
   //---
   int w = 0, h = 0;
