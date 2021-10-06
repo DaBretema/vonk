@@ -1,5 +1,7 @@
 #include "VwUtils.h"
 
+#include "Utils.h"
+
 #include "VwToStr.h"
 
 //
@@ -122,28 +124,63 @@ namespace vku::shaders
 
 //---------------------------------------------
 
-std::string getPath(char const *shaderName, char const *extension)
+std::string getPath(char const *shaderName, VkShaderStageFlagBits stage)
 {
+  static std::unordered_map<VkShaderStageFlagBits, std::string> stageToExtension {
+    { VK_SHADER_STAGE_VERTEX_BIT, "vert" },
+    { VK_SHADER_STAGE_FRAGMENT_BIT, "frag" },
+    { VK_SHADER_STAGE_COMPUTE_BIT, "comp" },
+    { VK_SHADER_STAGE_GEOMETRY_BIT, "geom" },
+    { VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, "tesc" },
+    { VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, "tese" },
+  };
+
   static auto const VwShadersPath = std::string("./assets/shaders/");  // get this path for a define
-  return VwShadersPath + shaderName + "." + extension + ".spv";
+  return VwShadersPath + shaderName + "." + stageToExtension[stage] + ".spv";
 };
-std::string getPathVert(char const *shaderName) { return getPath(shaderName, "vert"); }
-std::string getPathFrag(char const *shaderName) { return getPath(shaderName, "frag"); }
-std::string getPathComp(char const *shaderName) { return getPath(shaderName, "comp"); }
 
 //---------------------------------------------
 
-VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code)
+// VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code)
+// {
+//   VkShaderModuleCreateInfo createInfo {};
+//   createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+//   createInfo.codeSize = code.size();
+//   createInfo.pCode    = reinterpret_cast<const uint32_t *>(code.data());
+
+//   VkShaderModule shaderModule;
+//   VW_CHECK(vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule));
+
+//   return shaderModule;
+// }
+
+//---------------------------------------------
+
+ShaderData create(VkDevice logicalDevice, std::string const &name, VkShaderStageFlagBits stage)
 {
+  auto const path = vku::shaders::getPath(name.c_str(), stage);
+
+  auto code = vo::files::read(path);
+  if (code.empty()) { VO_ERR_FMT("Failed to open shader '{}'!", path); }
+
+  // VkShaderModule shaderModule = vku::shaders::createModule(logicalDevice, shaderBinary);
+
   VkShaderModuleCreateInfo createInfo {};
   createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  createInfo.codeSize = code.size();
+  createInfo.codeSize = VW_SIZE_CAST(code.size());
   createInfo.pCode    = reinterpret_cast<const uint32_t *>(code.data());
 
   VkShaderModule shaderModule;
   VW_CHECK(vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule));
 
-  return shaderModule;
+  VkPipelineShaderStageCreateInfo shaderStageInfo {
+    .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .stage  = stage,
+    .module = shaderModule,
+    .pName  = "main",  // Entrypoint function name
+  };
+
+  return { path, shaderModule, shaderStageInfo };
 }
 
 //---------------------------------------------

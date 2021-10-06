@@ -37,10 +37,20 @@ Settings getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, Sett
 
 namespace vku::shaders
 {  //
-std::string    getPathVert(char const *shaderName);
-std::string    getPathFrag(char const *shaderName);
-std::string    getPathComp(char const *shaderName);
-VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code);
+struct ShaderData
+{
+  std::string                     path;
+  VkShaderModule                  module;
+  VkPipelineShaderStageCreateInfo stageCreateInfo;
+};
+
+std::string getPathVert(char const *shaderName);
+std::string getPathFrag(char const *shaderName);
+std::string getPathComp(char const *shaderName);
+
+ShaderData create(VkDevice mLogicalDevice, std::string const &name, VkShaderStageFlagBits stage);
+
+// VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code);
 }  // namespace vku::shaders
 
 //=============================================================================

@@ -62,7 +62,8 @@ private:
 
   VkSurfaceKHR mSurface;
 
-  VkSwapchainKHR           mSwapChain = VK_NULL_HANDLE;
+  VkSwapchainKHR           mSwapChain    = VK_NULL_HANDLE;
+  VkSwapchainKHR           mOldSwapChain = VK_NULL_HANDLE;
   std::vector<VkImage>     mSwapChainImages;
   vku::swapchain::Settings mSwapChainSettings;
   std::vector<VkImageView> mSwapChainImageViews;
@@ -70,9 +71,26 @@ private:
   std::unordered_map<std::string, VkShaderModule> mShaderModules;
   std::vector<VkPipelineShaderStageCreateInfo>    mPipelineShaderStageCreateInfos;
 
-  VkRenderPass     mRenderPass       = VK_NULL_HANDLE;
-  VkPipelineLayout mPipelineLayout   = VK_NULL_HANDLE;
-  VkPipeline       mGraphicsPipeline = VK_NULL_HANDLE;
+  VkRenderPass     mRenderPass     = VK_NULL_HANDLE;
+  VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;
+
+  // . Input-State vertex
+  VkPipelineVertexInputStateCreateInfo mVertexInputInfo {
+    .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .vertexBindingDescriptionCount   = 0,
+    .pVertexBindingDescriptions      = nullptr,  // Optional
+    .vertexAttributeDescriptionCount = 0,
+    .pVertexAttributeDescriptions    = nullptr,  // Optional
+  };
+
+  // . Input-Assembly
+  VkPipelineInputAssemblyStateCreateInfo mInputAssembly {
+    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+    .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    .primitiveRestartEnable = VK_FALSE,
+  };
+
+  VkPipeline mGraphicsPipeline = VK_NULL_HANDLE;
 
   std::vector<VkFramebuffer> mSwapChainFramebuffers;
 
@@ -96,6 +114,7 @@ private:
   void createSwapChain();
   void createImageViews();
   void createRenderPass();
+  void createShaders();
   void createGraphicsPipeline();
   void createFramebuffers();
   void createCommandPool();

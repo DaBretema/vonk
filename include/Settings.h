@@ -10,7 +10,7 @@ namespace vo
 
 // === OTHER DEFINES
 //-----------------------------------------------------------------------------
-#define VO_VERBOSE            1
+#define VO_VERBOSE            0
 #define VO_VERBOSE_EXTENSIONS 0
 #define VO_FUNCTION_LINE_LOG  1
 

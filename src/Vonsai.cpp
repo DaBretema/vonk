@@ -160,10 +160,13 @@ void Vonsai::initVulkan()
   createRenderPass();
   VO_TRACE(3, PtrStr(mRenderPass));
 
+  VO_TRACE(2, "Create Shaders");
+  createShaders();
+  for (auto [_, shaderModule] : mShaderModules) { VO_TRACE(3, PtrStr(shaderModule)); }
+
   VO_TRACE(2, "Create Graphics-Pipeline");
   createGraphicsPipeline();
   VO_TRACE(3, PtrStr(mGraphicsPipeline));
-  for (auto [_, shaderModule] : mShaderModules) { VO_TRACE(3, PtrStr(shaderModule)); }
 
   VO_TRACE(2, "Create Frame-Buffers");
   createFramebuffers();
@@ -269,6 +272,9 @@ void Vonsai::cleanup()
 {
   // . Swap-Chain
   cleanupSwapChain();
+  VO_TRACE(2, "Destroy SWAP-CHAIN");
+  VO_TRACE(3, PtrStr(mSwapChain));
+  vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
 
   // . Logical Device
   // .. Dependencies
@@ -528,10 +534,12 @@ void Vonsai::createSwapChain()
   //   ownership transfers.
   auto const queuefamilyindices = mQueueFamilies.getUniqueIndices();
   if (queuefamilyindices.size() > 1) {
+    VO_INFO("SWAP-CHAIN Sharing Mode = VK_SHARING_MODE_CONCURRENT");
     createInfo.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
     createInfo.queueFamilyIndexCount = VW_SIZE_CAST(queuefamilyindices.size());
     createInfo.pQueueFamilyIndices   = queuefamilyindices.data();
   } else {
+    VO_INFO("SWAP-CHAIN Sharing Mode = VK_SHARING_MODE_EXCLUSIVE");
     createInfo.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.queueFamilyIndexCount = 0;        // Optional
     createInfo.pQueueFamilyIndices   = nullptr;  // Optional
@@ -554,14 +562,7 @@ void Vonsai::createSwapChain()
   // .. It's possible that your swap chain becomes invalid or unoptimized while your application is running, for example
   // because the window was resized. In that case the swap chain actually needs to be recreated from scratch and a
   // reference to the old one must be specified in this field.
-  createInfo.oldSwapchain = VK_NULL_HANDLE;
-  // createInfo.oldSwapchain = mSwapChain;  // @DANI this is the right way
-
-  // if (mSwapChain != VK_NULL_HANDLE) {
-  //   VO_TRACE(2, "Destroy SWAP-CHAIN");
-  //   VO_TRACE(3, PtrStr(mSwapChain));
-  //   vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
-  // }
+  createInfo.oldSwapchain = mOldSwapChain;
 
   // . Creation
   VW_CHECK(vkCreateSwapchainKHR(mLogicalDevice, &createInfo, nullptr, &mSwapChain));
@@ -684,58 +685,28 @@ void Vonsai::createRenderPass()
 
 //-----------------------------------------------------------------------------
 
+void Vonsai::createShaders()
+{
+  static auto const createShadersSameName =
+    [&](std::string const &name, std::initializer_list<VkShaderStageFlagBits> stages) {
+      for (auto const stage : stages) {
+        auto const data = vku::shaders::create(mLogicalDevice, name, stage);
+        mShaderModules.emplace(data.path, data.module);
+        mPipelineShaderStageCreateInfos.emplace_back(data.stageCreateInfo);
+      }
+    };
+
+  createShadersSameName("base", { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT });
+}
+
+//-----------------------------------------------------------------------------
+
 void Vonsai::createGraphicsPipeline()
 {
   /*
    * Maximum line width: Depends on the hardware and any line thicker than 1.0f requires you to enable the { wideLines }
    * GPU feature.
    */
-
-  // . Get names
-  auto const name   = "base";
-  auto const vsName = vku::shaders::getPathVert(name);
-  auto const fsName = vku::shaders::getPathFrag(name);
-
-  // . Read shader content
-  auto vs = vo::files::read(vsName);
-  auto fs = vo::files::read(fsName);
-  if (vs.empty() || fs.empty()) { VO_ERR_FMT("Failed to open shaders '{}'!", name); }
-
-  // . Register modules if valid
-  mShaderModules.emplace(vsName, vku::shaders::createModule(mLogicalDevice, vs));
-  mShaderModules.emplace(fsName, vku::shaders::createModule(mLogicalDevice, fs));
-
-  // . Stage for vertex-shader
-  VkPipelineShaderStageCreateInfo vertShaderStageInfo {};
-  vertShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  vertShaderStageInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;
-  vertShaderStageInfo.module = mShaderModules.at(vsName);
-  vertShaderStageInfo.pName  = "main";  // Entrypoint function name
-
-  // . Stage for fragment-shader
-  VkPipelineShaderStageCreateInfo fragShaderStageInfo {};
-  fragShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  fragShaderStageInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-  fragShaderStageInfo.module = mShaderModules.at(fsName);
-  fragShaderStageInfo.pName  = "main";
-
-  // . Store stages
-  mPipelineShaderStageCreateInfos.emplace_back(vertShaderStageInfo);
-  mPipelineShaderStageCreateInfos.emplace_back(fragShaderStageInfo);
-
-  // . Input-State vertex
-  VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
-  vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount   = 0;
-  vertexInputInfo.pVertexBindingDescriptions      = nullptr;  // Optional
-  vertexInputInfo.vertexAttributeDescriptionCount = 0;
-  vertexInputInfo.pVertexAttributeDescriptions    = nullptr;  // Optional
-
-  // . Input-Assembly
-  VkPipelineInputAssemblyStateCreateInfo inputAssembly {};
-  inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  inputAssembly.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  inputAssembly.primitiveRestartEnable = VK_FALSE;
 
   // . Viewport
 
@@ -856,8 +827,8 @@ void Vonsai::createGraphicsPipeline()
   pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.stageCount          = VW_SIZE_CAST(mPipelineShaderStageCreateInfos.size());
   pipelineInfo.pStages             = mPipelineShaderStageCreateInfos.data();
-  pipelineInfo.pVertexInputState   = &vertexInputInfo;
-  pipelineInfo.pInputAssemblyState = &inputAssembly;
+  pipelineInfo.pVertexInputState   = &mVertexInputInfo;
+  pipelineInfo.pInputAssemblyState = &mInputAssembly;
   pipelineInfo.pViewportState      = &viewportState;
   pipelineInfo.pRasterizationState = &rasterizer;
   pipelineInfo.pMultisampleState   = &multisampling;
@@ -1031,9 +1002,7 @@ void Vonsai::cleanupSwapChain()
     vkDestroyImageView(mLogicalDevice, imageView, nullptr);
   }
 
-  VO_TRACE(2, "Destroy SWAP-CHAIN");
-  VO_TRACE(3, PtrStr(mSwapChain));
-  vkDestroySwapchainKHR(mLogicalDevice, mSwapChain, nullptr);
+  mOldSwapChain = mSwapChain;
 }
 
 //-----------------------------------------------
