@@ -58,7 +58,7 @@ bool checkValidationLayersSupport(std::vector<char const *> const &layers)
 void createInstance(Instance &instance)
 {
   // . Create instance
-  if (!vo::vulkan::checkValidationLayersSupport(vo::sValidationLayers)) {
+  if (!vku::checkValidationLayersSupport(vo::sValidationLayers)) {
     vo__abort("Validation layers requested, but not available!");
   }
 
@@ -73,7 +73,7 @@ void createInstance(Instance &instance)
     .apiVersion         = VK_API_VERSION_1_2,
   };
 
-  auto const instanceExtensions = vo::vulkan::getInstanceExtensions();
+  auto const instanceExtensions = vku::getInstanceExtensions();
 
   VkInstanceCreateInfo const createInfo {
     .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -122,9 +122,9 @@ void createInstance(Instance &instance)
     const int midValue  = (                   //
       properties.limits.maxImageDimension2D  //
     );
-    const int nullValue = { !vku::queuefamily::isComplete(queueIndices)                                          //
-                            or vku::swapchain::isEmpty(physicalDevice, instance.surface)                         //
-                            or !vo::vulkan::checkDeviceExtensionsSupport(physicalDevice, vo::sDeviceExtensions)  //
+    const int nullValue = { !vku::queuefamily::isComplete(queueIndices)                                   //
+                            or vku::swapchain::isEmpty(physicalDevice, instance.surface)                  //
+                            or !vku::checkDeviceExtensionsSupport(physicalDevice, vo::sDeviceExtensions)  //
                             or !features.geometryShader };
 
     uint32_t const finalScore = nullValue * ((1000 * highValue) + midValue);
@@ -328,18 +328,18 @@ void createDevice(Device &device, Instance const &instance)
 void destroyDevice(Device &device)
 {
   //   for (auto framebuffer : mSwapChainFramebuffers) {
-  //     vkDestroyFramebuffer(vo::vulkan::device.handle, framebuffer, nullptr);
+  //     vkDestroyFramebuffer(device.handle, framebuffer, nullptr);
   //   }
 
   //   vkFreeCommandBuffers(
-  //     vo::vulkan::device.handle,
+  //     device.handle,
   //     mCommandPool,
   //     VW_SIZE_CAST(mCommandBuffers.size()),
   //     mCommandBuffers.data());
 
-  //   vkDestroyPipeline(vo::vulkan::device.handle, mGraphicsPipeline, nullptr);
-  //   vkDestroyPipelineLayout(vo::vulkan::device.handle, mPipelineLayout, nullptr);
-  //   vkDestroyRenderPass(vo::vulkan::device.handle, mRenderPass, nullptr);  // after: mPipelineLayout
+  //   vkDestroyPipeline(device.handle, mGraphicsPipeline, nullptr);
+  //   vkDestroyPipelineLayout(device.handle, mPipelineLayout, nullptr);
+  //   vkDestroyRenderPass(device.handle, mRenderPass, nullptr);  // after: mPipelineLayout
 
   for (auto imageView : device.swapChainImageViews) { vkDestroyImageView(device.handle, imageView, nullptr); }
   vkDestroySwapchainKHR(device.handle, device.swapChain, nullptr);

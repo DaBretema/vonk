@@ -5,9 +5,6 @@
 
 #include "VoWindow.h"
 #include "VoVulkan.h"
-#include "VwUtils.h"
-
-// #include "VwDebugMessenger.h"
 
 namespace vo
 {  //
@@ -34,8 +31,8 @@ private:
 
   // ::: Vulkan variables
 
-  vo::vulkan::Instance mInstance;
-  vo::vulkan::Device   mDevice;
+  vku::Instance mInstance;
+  vku::Device   mDevice;
 
   //.
   //.

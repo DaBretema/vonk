@@ -1,7 +1,7 @@
 #pragma once
 
 #include "_vulkan.h"
-#include "VwUtils.h"
+#include "VoVulkanUtils.h"
 
 #include <optional>
 
@@ -134,3 +134,5 @@ void destroyDevice(Device &device);
 //-----------------------------------------------
 
 }  // namespace vo::vulkan
+
+namespace vku = vo::vulkan;

@@ -38,14 +38,14 @@ void Vonsai::run()
 
 void Vonsai::initVulkan()
 {
-  vo::vulkan::createInstance(mInstance);
+  vku::createInstance(mInstance);
   vo__check(mInstance.handle);
 
-  vo::vulkan::createDevice(mDevice, mInstance);
+  vku::createDevice(mDevice, mInstance);
   vo__check(mDevice.handle);
 
-  vo::vulkan::destroyDevice(mDevice);
-  vo::vulkan::destroyInstance(mInstance);
+  vku::destroyDevice(mDevice);
+  vku::destroyInstance(mInstance);
 
   //   createInstance();
   // // vku::debugmessenger::create(mInstance, &??mDebugMessenger);
