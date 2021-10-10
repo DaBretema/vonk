@@ -3,12 +3,53 @@
 #include "VwVulkan.h"
 #include "Macros.h"
 
+#include <set>
 #include <vector>
+#include <optional>
 
 //
 
 //=============================================================================
-// --- SWAP CHAIN ---
+// ---- Debug Messenger ----
+//=============================================================================
+
+namespace vku::debugmessenger
+{  //
+
+void create(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle);
+void destroy(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle);
+
+}  // namespace vku::debugmessenger
+
+//
+
+//=============================================================================
+// ---- Queue Families ----
+//=============================================================================
+
+namespace vku::queuefamily
+{  //
+
+enum Type
+{
+  graphics = 0,
+  present,
+};
+
+bool                  isComplete(std::vector<std::optional<uint32_t>> const indices);
+std::vector<uint32_t> unrollOptionals(std::vector<std::optional<uint32_t>> const indices);  // Call after 'isComplete'
+
+std::vector<uint32_t>                getUniqueIndices(std::vector<uint32_t> const &indices);
+std::vector<std::optional<uint32_t>> findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+
+std::vector<VkQueue> findQueues(VkDevice device, std::vector<uint32_t> const &indices);
+
+}  // namespace vku::queuefamily
+
+//
+
+//=============================================================================
+// ---- SWAP CHAIN ----
 //=============================================================================
 
 namespace vku::swapchain
@@ -37,6 +78,7 @@ Settings getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, Sett
 
 namespace vku::shaders
 {  //
+
 struct ShaderData
 {
   std::string                     path;
@@ -49,8 +91,8 @@ std::string getPathFrag(char const *shaderName);
 std::string getPathComp(char const *shaderName);
 
 ShaderData create(VkDevice mLogicalDevice, std::string const &name, VkShaderStageFlagBits stage);
-
 // VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code);
+
 }  // namespace vku::shaders
 
 //=============================================================================

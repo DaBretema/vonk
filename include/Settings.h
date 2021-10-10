@@ -17,34 +17,29 @@ namespace vo
 // === INSTANCE EXTENSIONS
 //-----------------------------------------------------------------------------
 
-#define INSTANCE_EXTENSION_SET 1
+#define INSTANCE_EXTENSION_SET 0
 
 #if INSTANCE_EXTENSION_SET == 0
-inline constexpr std::array<const char *, 0> sInstanceExtensions {};
+inline const std::vector<const char *> sInstanceExtensions {};
 #elif INSTANCE_EXTENSION_SET == 1
-inline constexpr std::array                  sInstanceExtensions { VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
-#elif INSTANCE_EXTENSION_SET == 2
-inline constexpr std::array                  sInstanceExtensions { VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-                                                  VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
+inline const std::vector<const char *> sInstanceExtensions { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
 #endif
 
-inline constexpr bool sHasInstanceExtensions { !sInstanceExtensions.empty() };
+inline const bool sHasInstanceExtensions { !sInstanceExtensions.empty() };
 
 // === DEVICE EXTENSIONS
 //-----------------------------------------------------------------------------
 
-#define DEVICE_EXTENSION_SET 2
+#define DEVICE_EXTENSION_SET 1
 
 #if DEVICE_EXTENSION_SET == 0
-[[maybe_unused]] inline constexpr std::array<const char *, 0> sDeviceExtensions {};
+inline const std::vector<const char *> sDeviceExtensions {};
 #elif DEVICE_EXTENSION_SET == 1
-[[maybe_unused]] inline constexpr std::array sDeviceExtensions = { "VK_KHR_portability_subset" };
-#elif DEVICE_EXTENSION_SET == 2
-[[maybe_unused]] inline constexpr std::array sDeviceExtensions = { "VK_KHR_portability_subset",
-                                                                   VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+inline const std::vector<const char *> sDeviceExtensions = { "VK_KHR_portability_subset",
+                                                             VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 #endif
 
-inline constexpr bool sHasDeviceExtensions { !sDeviceExtensions.empty() };
+inline const bool sHasDeviceExtensions { !sDeviceExtensions.empty() };
 
 // === VALIDATION LAYERS
 //-----------------------------------------------------------------------------
@@ -52,12 +47,12 @@ inline constexpr bool sHasDeviceExtensions { !sDeviceExtensions.empty() };
 #define VALIDATION_SET 1
 
 #if VALIDATION_SET == 0
-inline constexpr std::array<const char *, 0> sValidationLayers {};
+inline const std::vector<const char *> sValidationLayers {};
 #elif VALIDATION_SET == 1
-inline constexpr std::array                  sValidationLayers { "VK_LAYER_KHRONOS_validation" };
+inline const std::vector<const char *> sValidationLayers { "VK_LAYER_KHRONOS_validation" };
 #endif
 
-inline constexpr bool sHasValidationLayers { !sValidationLayers.empty() };
+inline const bool sHasValidationLayers { !sValidationLayers.empty() };
 
 //-----------------------------------------------------------------------------
 

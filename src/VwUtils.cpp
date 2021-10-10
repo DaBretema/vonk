@@ -7,6 +7,164 @@
 //
 
 //=============================================================================
+// ---- Debug Messenger ----
+//=============================================================================
+
+namespace vku::debugmessenger
+{  //
+
+static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
+  VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+  VkDebugUtilsMessageTypeFlagsEXT             messageType,
+  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+  MBU void *                                  pUserData)
+{
+  static std::unordered_map<int32_t, bool> CACHE {};
+  auto const                               ID = pCallbackData->messageIdNumber;
+
+  if (!CACHE[ID] && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+    fmt::print(
+      "\n ❗️ [VALIDATION LAYERS] - {} at {}{}"
+      "\n--------------------------------------------------------------------------------\n{}\n",
+      vku::ToStr_DebugSeverity.at(messageSeverity),
+      vku::ToStr_DebugType.at(messageType),
+      pUserData ? fmt::format("- {}", pUserData) : std::string { "" },
+      pCallbackData->pMessage);
+
+    CACHE[ID] = true;
+  }
+
+  return VK_FALSE;
+}
+
+//-----------------------------------------------
+
+void create(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle)
+{
+  static VkDebugUtilsMessengerCreateInfoEXT debugmessengerCreateInfo {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+
+    .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT    //
+                       | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT  //
+                       | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+
+    .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT       //
+                   | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  //
+                   | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+
+    .pfnUserCallback = sDebugMessengerCallback,
+
+    .pUserData = nullptr,  // Optional
+    .pNext     = nullptr,  // Mandatory
+    .flags     = 0,        // Mandatory
+  };
+
+  if (!vo::sHasValidationLayers) return;
+  vku__instanceFn(instance, vkCreateDebugUtilsMessengerEXT, &debugmessengerCreateInfo, nullptr, &debugHandle);
+}
+
+//-----------------------------------------------
+
+void destroy(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle)
+{
+  if (!vo::sHasValidationLayers) return;
+  vku__instanceFn(instance, vkDestroyDebugUtilsMessengerEXT, debugHandle, nullptr);
+}
+
+//-----------------------------------------------
+
+}  // namespace vku::debugmessenger
+
+//
+
+//=============================================================================
+// ---- Queue Families ----
+//=============================================================================
+
+namespace vku::queuefamily
+{  //
+
+//-----------------------------------------------
+
+bool isComplete(std::vector<std::optional<uint32_t>> const indices)
+{
+  for (auto &&i : indices) {
+    if (!i.has_value()) { return false; }
+  }
+  return true;
+};
+
+//-----------------------------------------------
+
+std::vector<uint32_t> unrollOptionals(std::vector<std::optional<uint32_t>> const indices)
+{
+  std::vector<uint32_t> indicesValue;
+  indicesValue.reserve(indices.size());
+  for (auto &&i : indices) { indicesValue.push_back(i.value()); }
+  return indicesValue;
+};
+
+//-----------------------------------------------
+
+std::vector<uint32_t> getUniqueIndices(std::vector<uint32_t> const &indices)
+{
+  std::set<uint32_t> uniqueIndices { indices.begin(), indices.end() };
+  return std::vector<uint32_t> { uniqueIndices.begin(), uniqueIndices.end() };
+}
+
+//-----------------------------------------------
+
+std::vector<std::optional<uint32_t>> findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
+{
+  if (physicalDevice == VK_NULL_HANDLE or surface == VK_NULL_HANDLE) {
+    vo__assert(0);
+    return {};
+  }
+
+  // . Get device families
+  uint32_t queueFamilyCount = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+  std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
+
+  // . Indices to find
+  std::optional<uint32_t> graphicsIndex;
+  std::optional<uint32_t> presentIndex;
+  auto const              isComplete = [&]() { return graphicsIndex.has_value() && presentIndex.has_value(); };
+
+  // . Find
+  for (uint32_t i = 0u; (!isComplete() and i < queueFamilies.size()); ++i) {
+    // .. Graphics
+    if (queueFamilies.at(i).queueFlags & VK_QUEUE_GRAPHICS_BIT) { graphicsIndex = i; }
+    // .. Present
+    VkBool32 presentSupport = false;
+    vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
+    if (presentSupport) { presentIndex = i; }
+  }
+
+  std::vector<std::optional<uint32_t>> indices(2);
+  indices[Type::graphics] = graphicsIndex;
+  indices[Type::present]  = presentIndex;
+  return indices;
+}
+
+//-----------------------------------------------
+
+std::vector<VkQueue> findQueues(VkDevice device, std::vector<uint32_t> const &indices)
+{
+  std::vector<VkQueue> queues(2);
+  vkGetDeviceQueue(device, indices[Type::graphics], 0, &queues[Type::graphics]);
+  vkGetDeviceQueue(device, indices[Type::present], 0, &queues[Type::present]);
+  return queues;
+}
+
+//-----------------------------------------------
+
+}  // namespace vku::queuefamily
+
+//
+
+//=============================================================================
 // --- SWAP CHAIN ---
 //=============================================================================
 
@@ -100,11 +258,11 @@ Settings getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, Sett
 
 void Settings::dumpInfo() const
 {
-  VO_INFO("- SwapChainSettings -");
-  VO_INFO_FMT("Image Count             : {}", minImageCount);
-  VO_INFO_FMT("Selected Extent 2D      : ({},{})", extent2D.width, extent2D.height);
-  VO_INFO_FMT("Selected Present Mode   : {}", vku::ToStr_PresentMode.at(presentMode));
-  VO_INFO_FMT("Selected Surface Format : {}", vku::ToStr_Format.at(surfaceFormat.format));
+  vo__info("- SwapChainSettings -");
+  vo__infof("Image Count             : {}", minImageCount);
+  vo__infof("Selected Extent 2D      : ({},{})", extent2D.width, extent2D.height);
+  vo__infof("Selected Present Mode   : {}", vku::ToStr_PresentMode.at(presentMode));
+  vo__infof("Selected Surface Format : {}", vku::ToStr_Format.at(surfaceFormat.format));
 }
 
 //---------------------------------------------
@@ -161,17 +319,17 @@ ShaderData create(VkDevice logicalDevice, std::string const &name, VkShaderStage
   auto const path = vku::shaders::getPath(name.c_str(), stage);
 
   auto code = vo::files::read(path);
-  if (code.empty()) { VO_ERR_FMT("Failed to open shader '{}'!", path); }
+  if (code.empty()) { vo__errf("Failed to open shader '{}'!", path); }
 
   // VkShaderModule shaderModule = vku::shaders::createModule(logicalDevice, shaderBinary);
 
   VkShaderModuleCreateInfo createInfo {};
   createInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  createInfo.codeSize = VW_SIZE_CAST(code.size());
+  createInfo.codeSize = vku__castsize(code.size());
   createInfo.pCode    = reinterpret_cast<const uint32_t *>(code.data());
 
   VkShaderModule shaderModule;
-  VW_CHECK(vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule));
+  vku__check(vkCreateShaderModule(logicalDevice, &createInfo, nullptr, &shaderModule));
 
   VkPipelineShaderStageCreateInfo shaderStageInfo {
     .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

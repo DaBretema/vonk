@@ -6,17 +6,19 @@
 #include "Settings.h"
 
 namespace vo
-{
-//
+{  //
 
 // ::: Mark argunment as unused to avoid warnings
 #define MBU [[maybe_unused]]
 static inline auto const PtrStr = [](auto *p) { return fmt::format("{}", fmt::ptr(p)); };
 
+//.
+//.
+//.
+
 //
-// === PRINTERS
+// === VONSAI MACROS = vo__
 //-----------------------------------------------------------------------------
-#ifndef NDEBUG
 static inline auto const VO_TRACE = [](int lvl, auto msg) {
   std::string const beginLineJumps = lvl < 2 ? "\n\n" : lvl < 3 ? "\n" : "";
 
@@ -32,63 +34,50 @@ static inline auto const VO_TRACE = [](int lvl, auto msg) {
 
   fmt::print("{}{}{}", beginLineJumps, message, subLine);
 };
-#  if VO_FUNCTION_LINE_LOG
-#    define VO_INFO(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#    define VO_ERR(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-// #    define VO_ERR(msg)  fmt::print("[VO_ERR] ({}:{})\n↪ {}\n", __FILE__, __LINE__, msg)
-#  else
-#    define VO_INFO(msg) fmt::print("ℹ️  {}\n", msg)
-#    define VO_ERR(msg)  fmt::print("⚠️  {}\n", msg)
-#  endif
-#else
-#  define VO_INFO(msg) fmt::print("ℹ️  {}\n", msg)
-#  define VO_ERR(msg)  fmt::print("⚠️  {}\n", msg)
-#  define VO_TRACE(s)
-#endif
 
-#define VO_INFO_FMT(msg, ...) VO_INFO(fmt::format(msg, __VA_ARGS__))
-#define VO_ERR_FMT(msg, ...)  VO_ERR(fmt::format(msg, __VA_ARGS__))
-
-#define VO_ABORT(msg) \
-  VO_ERR(msg);        \
+// "Raw" log macros
+#define vo__info(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define vo__warn(msg) fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define vo__err(msg)  fmt::print("⛔️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define vo__abort(msg) \
+  vo__err(msg);        \
   abort();
 
-#define VO_ABORT_FMT(msg, ...)  \
-  VO_ERR_FMT(msg, __VA_ARGS__); \
+// "Formatable" log macros
+#define vo__infof(msg, ...) vo__info(fmt::format(msg, __VA_ARGS__))
+#define vo__warnf(msg, ...) vo__err(fmt::format(msg, __VA_ARGS__))
+#define vo__errf(msg, ...)  vo__err(fmt::format(msg, __VA_ARGS__))
+#define vo__abortf(msg, ...)  \
+  vo__errf(msg, __VA_ARGS__); \
   abort();
 
-#define VO_CHECK(conditionCode) \
-  if (!conditionCode) { VO_ABORT(#conditionCode); }
+// Evaluate critical condition
+#define vo__check(conditionCode) \
+  if (!(conditionCode)) { vo__abort(#conditionCode); }
 
-// //
-// // === LOGIC ABSTRACTION : PATHS
-// //-----------------------------------------------------------------------------
+// Custom Assert
+#define vo__assert(cond) assert(cond)
 
-// auto const VO__INTERNAL__GET_SHADER_PATH = [](char const *shaderName, char const *extension) {
-//   static auto const VwShadersPath = std::string("./assets/shaders/");
-//   return VwShadersPath + shaderName + "." + extension + ".spv";
-// };
-// #define VO_GET_SHADER_PATH_VERT(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "vert")
-// #define VO_GET_SHADER_PATH_FRAG(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "frag")
-// #define VO_GET_SHADER_PATH_COMP(shaderName) VO__INTERNAL__GET_SHADER_PATH(shaderName, "comp")
+//.
+//.
+//.
 
-//
-// === VULKAN MACROS = VW_
+// === VULKAN MACROS = vku__
 //-----------------------------------------------------------------------------
 
 // ::: Validate api calls
-#define VW_CHECK(vulkanCode) \
-  if (VkResult res = vulkanCode; res != VK_SUCCESS) { VO_ABORT_FMT("{} : {}", res, #vulkanCode); }
+#define vku__check(vulkanCode) \
+  if (VkResult res = vulkanCode; res != VK_SUCCESS) { vo__abortf("{} : {}", res, #vulkanCode); }
 
 // ::: Cast shortcut
-#define VW_SIZE_CAST(v) static_cast<uint32_t>(v)
+#define vku__castsize(v) static_cast<uint32_t>(v)
 
 // ::: Get instance functions
-#define VW_INSTANCE_FN(instance, extName, ...)                                    \
+#define vku__instanceFn(instance, extName, ...)                                   \
   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
     fn(instance, __VA_ARGS__);                                                    \
   } else {                                                                        \
-    VO_ERR_FMT("Function {} is not available", #extName);                         \
+    vo__errf("Function {} is not available", #extName);                           \
   }
 
 }  // namespace vo
