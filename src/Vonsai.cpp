@@ -1,19 +1,8 @@
 #include "Vonsai.h"
 
-#include <map>
-#include <vector>
-
-#include <fmt/core.h>
-
-#include "Utils.h"
-#include "Macros.h"
-#include "Settings.h"
-
 namespace vo
 {
-//-----------------------------------------------------------------------------
-// === ENTRY POINT
-//-----------------------------------------------------------------------------
+//-----------------------------------------------
 
 void Vonsai::run()
 {
@@ -32,47 +21,43 @@ void Vonsai::run()
   // cleanup();
 }
 
-//-----------------------------------------------------------------------------
-// === TO RUN
-//-----------------------------------------------------------------------------
+//-----------------------------------------------
+
+//.
+
+//-----------------------------------------------
 
 void Vonsai::initVulkan()
 {
-  vku::createInstance(mInstance);
+  // . Create instance
+  mInstance.create();
   vo__check(mInstance.handle);
 
-  vku::createDevice(mDevice, mInstance);
+  // . Create device
+  mDevice.create(mInstance);
   vo__check(mDevice.handle);
 
-  vku::destroyDevice(mDevice);
-  vku::destroyInstance(mInstance);
+  // . Create Shaders
+  // ..  NOTE: this approach puts shaders as "global" objects available for every pipeline, is this the best option?
 
-  //   createInstance();
-  // // vku::debugmessenger::create(mInstance, &??mDebugMessenger);
-  // mDebugMessenger.create(mInstance);
+  // . Create graphic pipeline ( Some parts can be defined only once as 'main-settings' or similar)
+  // ..  Render Passes
+  // ....  SwapChain FrameBuffers ( Needs to know wich RenderPass to represent! )
+  // ......  Command Buffers      ( Needs to know : RenderPass and FrameBuffer(s) )
+  // ..  Extra Sync objects
 
-  // createSurface();
+  //=xxxxxxxxxxxxxx
+  //=xxxxxxxxxxxxxx
 
-  // pickPhysicalDevice();
-
-  // createLogicalDevice();
-
-  // createSwapChain();
-
-  // createImageViews();
+  mDevice.destroy();
+  mInstance.destroy();
 
   // createRenderPass();
-
   // createShaders();
-
   // createGraphicsPipeline();
-
   // createFramebuffers();
-
   // createCommandPool();
-
   // createCommandBuffers();
-
   // createSyncObjects();
 }
 
@@ -457,20 +442,9 @@ void Vonsai::initVulkan()
 //     framebufferInfo.layers          = 1;
 
 //     // . Creation
-//     VW_CHECK(vkCreateFramebuffer(vo::vulkan::device.handle, &framebufferInfo, nullptr, &mSwapChainFramebuffers[i]));
+//     VW_CHECK(vkCreateFramebuffer(vo::vulkan::device.handle, &framebufferInfo, nullptr,
+//     &mSwapChainFramebuffers[i]));
 //   }
-// }
-
-// //-----------------------------------------------------------------------------
-
-// void Vonsai::createCommandPool()
-// {
-//   VkCommandPoolCreateInfo poolInfo {};
-//   poolInfo.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-//   poolInfo.queueFamilyIndex = vo::vulkan::device.queueGraphicsIndex;
-//   poolInfo.flags            = 0;  // Optional
-
-//   VW_CHECK(vkCreateCommandPool(vo::vulkan::device.handle, &poolInfo, nullptr, &mCommandPool));
 // }
 
 // //-----------------------------------------------------------------------------

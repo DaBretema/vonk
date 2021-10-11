@@ -9,6 +9,63 @@ namespace vo::vulkan
 //
 
 //=============================================================================
+// ---- Others ----
+//=============================================================================
+namespace others
+{  //
+
+  //-----------------------------------------------
+
+  std::vector<char const *> getInstanceExtensions()
+  {
+    auto exts = vo::window::getRequiredInstanceExtensions();
+
+    if (vo::sHasValidationLayers) { exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+
+    if (vo::sHasInstanceExtensions) {
+      for (auto &&ext : vo::sInstanceExtensions) { exts.emplace_back(ext); }
+    }
+
+    return exts;
+  }
+
+  //-----------------------------------------------
+
+  bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts)
+  {
+    if (exts.empty()) return true;
+
+    uint32_t count;
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+    std::vector<VkExtensionProperties> available(count);
+    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, available.data());
+
+    std::set<std::string> required(exts.begin(), exts.end());
+    for (const auto &item : available) { required.erase(item.extensionName); }
+    return required.empty();
+  }
+
+  //-----------------------------------------------
+
+  bool checkValidationLayersSupport(std::vector<char const *> const &layers)
+  {
+    if (layers.empty()) return true;
+
+    uint32_t count;
+    vkEnumerateInstanceLayerProperties(&count, nullptr);
+    std::vector<VkLayerProperties> available(count);
+    vkEnumerateInstanceLayerProperties(&count, available.data());
+
+    std::set<std::string> required(layers.begin(), layers.end());
+    for (const auto &item : available) { required.erase(item.layerName); }
+    return required.empty();
+  }
+
+}  // namespace others
+
+//=============================================================================
+
+//=============================================================================
 // ---- Debug Messenger ----
 //=============================================================================
 

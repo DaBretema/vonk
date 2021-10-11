@@ -2,6 +2,7 @@
 
 #include "_vulkan.h"
 #include "Macros.h"
+#include "VoWindow.h"
 
 #include <set>
 #include <vector>
@@ -9,6 +10,22 @@
 
 namespace vo::vulkan
 {  //
+
+//
+
+//=============================================================================
+// ---- Others ----
+//=============================================================================
+namespace others
+{  //
+
+  std::vector<char const *> getInstanceExtensions();
+  bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts);
+  bool checkValidationLayersSupport(std::vector<char const *> const &layers);
+
+}  // namespace others
+
+//=============================================================================
 
 //
 
@@ -23,6 +40,8 @@ namespace debugmessenger
   void destroy(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle);
 
 }  // namespace debugmessenger
+
+//=============================================================================
 
 //
 
@@ -48,6 +67,8 @@ namespace queuefamily
   std::vector<VkQueue> findQueues(VkDevice device, std::vector<uint32_t> const &indices);
 
 }  // namespace queuefamily
+
+//=============================================================================
 
 //
 
