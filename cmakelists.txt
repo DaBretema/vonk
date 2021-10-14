@@ -6,8 +6,8 @@
 cmake_minimum_required(VERSION 3.0)
 set(CMAKE_MESSAGE_LOG_LEVEL "WARNING")
 
-set(pName Vonsai)
-project(${pName})
+# set(PROJECT_NAME Vonsai)
+project(Vonsa)
 
 # set(CMAKE_CXX_STANDARD 20)
 # set(CMAKE_CXX_EXTENSIONS OFF)
@@ -110,16 +110,14 @@ add_custom_target(shaders ALL DEPENDS ${SPV_SHADERS}) # Seems like unneeded
 file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 file(GLOB HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
 
-add_library(${pName} STATIC ${SPV_SHADERS} ${SOURCE_FILES} ${HEADER_FILES})
+add_library(${PROJECT_NAME} STATIC ${SPV_SHADERS} ${SOURCE_FILES} ${HEADER_FILES})
 
-target_compile_features(${pName} PUBLIC
+target_compile_features(${PROJECT_NAME} PUBLIC
     cxx_std_20
 )
 
-
-target_link_libraries(${pName} PRIVATE ${pLibs})
-target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLibsIncl})
-
+target_link_libraries(${PROJECT_NAME} PRIVATE ${pLibs})
+target_include_directories(${PROJECT_NAME} PUBLIC "./src" "./include" "./vendor" ${pLibsIncl})
 
 # ------------------------------------------------------------------------- #
 # EXE and TESTING
@@ -127,7 +125,7 @@ target_include_directories(${pName} PUBLIC "./src" "./include" "./vendor" ${pLib
 
 function(addTest tName)
     add_executable(${tName} test/${tName}.cpp)
-    target_link_libraries(${tName} PRIVATE ${pLibs} ${pName})
+    target_link_libraries(${tName} PRIVATE ${pLibs} ${PROJECT_NAME})
     add_test(COMMAND ${tName})
 endfunction()
 

@@ -32,12 +32,16 @@ struct Device
   std::vector<VkImageView>   swapchainImageViews;
   std::vector<VkFramebuffer> swapchainFramebuffers;
 
+  uint32_t             inFlightMaxFrames = 1;
+  std::vector<VkFence> inFlightFencesSubmit;
+  std::vector<VkFence> inFlightFencesAcquire;
+
   std::unordered_map<std::string, VkShaderModule> shaderModules;
   std::vector<VkPipelineShaderStageCreateInfo>    pipelineShaderStageCreateInfos;
 
-  VkRenderPass     renderPass      = VK_NULL_HANDLE;  // This could grow, might be a std::vector<VkRenderPass>
-  VkPipelineLayout pipelineLayout  = VK_NULL_HANDLE;  // ... std::vector<VkPipelineLayout> (???)
-  VkPipeline       gaphicsPipeline = VK_NULL_HANDLE;  // ... std::vector<VkPipeline> (???)
+  VkRenderPass     renderpass       = VK_NULL_HANDLE;  // This could grow, might be a std::vector<VkRenderPass>
+  VkPipelineLayout pipelineLayout   = VK_NULL_HANDLE;  // ... std::vector<VkPipelineLayout> (???)
+  VkPipeline       graphicsPipeline = VK_NULL_HANDLE;  // ... std::vector<VkPipeline> (???)
 
   VkCommandPool commandpool = VK_NULL_HANDLE;  // This have been meant to be one per thread,
                                                // so extract it to a pool of pools ?
@@ -46,59 +50,17 @@ struct Device
   std::vector<VkSemaphore> imageSemaphores;
   std::vector<VkSemaphore> renderSempahores;
 
-  uint32_t             inFlightMaxFrames;
-  std::vector<VkFence> inFlightFencesSubmit;
-  std::vector<VkFence> inFlightFencesAcquire;
-
   void create(Instance const &instance);
   void destroy();
 
+  void reCreateSwapChain();
+  void createSwapChain();
+  void createGraphicsPipeline();
+
 private:
   Instance const *mInstance = nullptr;
-  void            createSwapChain();
+  void            destroySwapChainRelated();
 };
-
-//......
-//......
-//......
-
-// . initDevice( VulkanDevice );
-// void createDevice(Device &device, Instance const &instance);
-// void destroyDevice(Device &device);
-// .. createSwapChain( vulkanDevice )  V
-// .. createImageViews( vulkanDevice ) V
-
-// .. createRenderPass( vulkanDevice )
-// .. createShaders( vulkanDevice )
-// .. createGraphicsPipeline( vulkanDevice )
-
-// .. createFramebuffers( vulkanDevice )
-
-// .. createCommandPool( vulkanDevice )
-// .. createCommandBuffers( vulkanDevice )
-
-// .. createSyncObjects( vulkanDevice )
-
-//-----------------------------------------------
-//-----------------------------------------------
-
-// . OnEvents
-// .. recreateSwapChain( vulkanDevice )  :  OnWindowResize, AfterAcquireChecks, AfterPresentChecks
-
-//-----------------------------------------------
-//-----------------------------------------------
-
-// . Draw frame ( vulkanDevice )
-// .. Is there a better way of manage create-info structures and
-// swapchain-recreation conditions? (See 'OnEvents')
-
-//-----------------------------------------------
-//-----------------------------------------------
-
-// . Clean up ( vulkanInstanceState, vulkanDevice )
-
-//-----------------------------------------------
-//-----------------------------------------------
 
 }  // namespace vo::vulkan
 

@@ -114,7 +114,7 @@ namespace shaders
   std::string getPathFrag(char const *shaderName);
   std::string getPathComp(char const *shaderName);
 
-  ShaderData create(VkDevice mLogicalDevice, std::string const &name, VkShaderStageFlagBits stage);
+  ShaderData create(VkDevice logicalDevice, std::string const &name, VkShaderStageFlagBits stage);
   // VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code);
 
 }  // namespace shaders

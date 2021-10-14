@@ -366,10 +366,10 @@ namespace shaders
   {
     auto const path = getPath(name.c_str(), stage);
 
-    auto code = vo::files::read(path);
+    auto const code = vo::files::read(path);
     if (code.empty()) { vo__errf("Failed to open shader '{}'!", path); }
 
-    VkShaderModuleCreateInfo shadermoduleCreateInfo {
+    VkShaderModuleCreateInfo const shadermoduleCreateInfo {
       .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
       .codeSize = vku__castsize(code.size()),
       .pCode    = reinterpret_cast<const uint32_t *>(code.data()),

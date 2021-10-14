@@ -14,7 +14,10 @@ std::vector<char> read(std::string const &filepath)
 {
   // . Open file from the end or return empty
   auto file = std::ifstream { filepath, std::ios::ate | std::ios::binary };
-  if (!file.is_open()) { return {}; }
+  if (!file.is_open()) {
+    vo__abortf("Issues opening shader: {}", filepath);
+    return {};
+  }
 
   // . Create a buffer with the size of the file
   size_t            fileSize = (size_t)file.tellg();

@@ -13,9 +13,6 @@ namespace vo::window
 
 //-----------------------------------------------
 
-// void waitEvents();
-// void pollEvents();
-
 void init(int32_t w_, int32_t h_, char const *title_);
 void cleanup();
 
