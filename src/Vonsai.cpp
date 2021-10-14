@@ -10,12 +10,15 @@ void Vonsai::run()
   vo::window::init(1280, 720, "Vonsai");
 
   // ::: INIT VULKAN INSTANCE
+
   // . Create instance
   mInstance.create();
   vo__check(mInstance.handle);
+
   // . Create device
   mDevice.create(mInstance);
   vo__check(mDevice.handle);
+
   // . Populate shaders
   static auto const createShadersSameName =
     [&](std::string const &name, std::initializer_list<VkShaderStageFlagBits> stages) {
@@ -26,8 +29,8 @@ void Vonsai::run()
       }
     };
   createShadersSameName("base", { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT });
+
   // . SwapChain and GraphicsPipeline
-  mDevice.createSwapChain();
   mDevice.createGraphicsPipeline();
 
   // ::: MAIN LOOP

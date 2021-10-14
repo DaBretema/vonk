@@ -496,7 +496,7 @@ void Device::create(Instance const &instance)
 
   //=====
 
-  // createSwapChain();
+  createSwapChain();
   // createGraphicsPipeline();
 
   //=====
