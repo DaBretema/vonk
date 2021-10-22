@@ -3,6 +3,7 @@
 #include "_vulkan.h"
 #include "Macros.h"
 #include "VoWindow.h"
+#include "VoVulkanTypes.h"
 
 #include <set>
 #include <vector>
@@ -49,7 +50,7 @@ namespace debugmessenger
 // ---- Queue Families ----
 //=============================================================================
 
-namespace queuefamily
+namespace queue
 {  //
 
   enum Type
@@ -58,15 +59,30 @@ namespace queuefamily
     present,
   };
 
-  bool                  isComplete(std::vector<std::optional<uint32_t>> const indices);
-  std::vector<uint32_t> unrollOptionals(std::vector<std::optional<uint32_t>> const indices);  // Call after: isComplete
+  struct IndicesOpt
+  {
+    std::optional<uint32_t> graphics, present;  //, compute, transfer;
+  };
 
-  std::vector<uint32_t>                getUniqueIndices(std::vector<uint32_t> const &indices);
-  std::vector<std::optional<uint32_t>> findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+  // struct Indices
+  // {
+  //   uint32_t graphics, present;  //, compute, transfer;
+  // };
 
-  std::vector<VkQueue> findQueues(VkDevice device, std::vector<uint32_t> const &indices);
+  // struct Queues
+  // {
+  //   VkQueue graphics, present;  //, compute, transfer;
+  // };
 
-}  // namespace queuefamily
+  bool           isComplete(IndicesOpt const &indices);
+  QueueIndices_t unrollOptionals(IndicesOpt const &indices);  // Call after: isComplete
+
+  std::vector<uint32_t> getUniqueIndices(QueueIndices_t const &indices);
+  IndicesOpt            findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+
+  Queues_t findQueues(VkDevice device, QueueIndices_t const &indices);
+
+}  // namespace queue
 
 //=============================================================================
 
@@ -78,17 +94,15 @@ namespace queuefamily
 
 namespace swapchain
 {  //
-  struct Settings
+  struct SupportSurface
   {
-    VkExtent2D               extent2D      = { 1280, 720 };
-    VkPresentModeKHR         presentMode   = VK_PRESENT_MODE_FIFO_KHR;
-    VkSurfaceFormatKHR       surfaceFormat = { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
-    uint32_t                 minImageCount = 0u;
-    VkSurfaceCapabilitiesKHR capabilities  = {};
-    void                     dumpInfo() const;
+    VkSurfaceCapabilitiesKHR        caps;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR>   presentModes;
   };
-  bool     isEmpty(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-  Settings getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, Settings rs);
+
+  bool                isEmpty(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+  SwapShainSettings_t getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, SwapShainSettings_t rs);
 
 }  // namespace swapchain
 
@@ -110,12 +124,7 @@ namespace shaders
     VkPipelineShaderStageCreateInfo stageCreateInfo;
   };
 
-  std::string getPathVert(char const *shaderName);
-  std::string getPathFrag(char const *shaderName);
-  std::string getPathComp(char const *shaderName);
-
   ShaderData create(VkDevice logicalDevice, std::string const &name, VkShaderStageFlagBits stage);
-  // VkShaderModule createModule(VkDevice logicalDevice, const std::vector<char> &code);
 
 }  // namespace shaders
 

@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "VoWindow.h"
-#include "VoVulkanDevice.h"
+#include "VoVulkanBase.h"
 
 namespace vo
 {  //
@@ -17,8 +17,10 @@ public:
 
 private:
   // ::: Vulkan variables
-  vku::Instance mInstance;
-  vku::Device   mDevice;
+  // vku::Instance mInstance;
+  // vku::Device   mDevice;
+
+  vku::Base mVulkan;
 
   // ::: App variables
   uint32_t    mW { 800 };

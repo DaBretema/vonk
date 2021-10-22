@@ -139,43 +139,47 @@ namespace debugmessenger
 //
 
 //=============================================================================
-// ---- Queue Families ----
+// ---- Queues ----
 //=============================================================================
 
-namespace queuefamily
+namespace queue
 {  //
 
   //-----------------------------------------------
 
-  bool isComplete(std::vector<std::optional<uint32_t>> const indices)
+  bool isComplete(IndicesOpt const &indicesOpt)
   {
-    for (auto &&i : indices) {
-      if (!i.has_value()) { return false; }
-    }
-    return true;
+    return true                                 //
+           and indicesOpt.graphics.has_value()  //
+           and indicesOpt.present.has_value()   //
+                                                //  and indicesOpt.compute.has_value()   //
+                                                //  and indicesOpt.transfer.has_value()  //
+      ;
   };
 
   //-----------------------------------------------
 
-  std::vector<uint32_t> unrollOptionals(std::vector<std::optional<uint32_t>> const indices)
+  QueueIndices_t unrollOptionals(IndicesOpt const &indicesOpt)
   {
-    std::vector<uint32_t> indicesValue;
-    indicesValue.reserve(indices.size());
-    for (auto &&i : indices) { indicesValue.push_back(i.value()); }
-    return indicesValue;
+    QueueIndices_t indices;
+    indices.graphics = indicesOpt.graphics.value();
+    indices.present  = indicesOpt.present.value();
+    // indices.compute  = indicesOpt.compute.value();
+    // indices.transfer  = indicesOpt.transfer.value();
+    return indices;
   };
 
   //-----------------------------------------------
 
-  std::vector<uint32_t> getUniqueIndices(std::vector<uint32_t> const &indices)
+  std::vector<uint32_t> getUniqueIndices(QueueIndices_t const &indices)
   {
-    std::set<uint32_t> uniqueIndices { indices.begin(), indices.end() };
+    std::set<uint32_t> uniqueIndices { indices.graphics, indices.present, /* indices.compute, indices.transfer */ };
     return std::vector<uint32_t> { uniqueIndices.begin(), uniqueIndices.end() };
   }
 
   //-----------------------------------------------
 
-  std::vector<std::optional<uint32_t>> findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
+  IndicesOpt findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
   {
     if (physicalDevice == VK_NULL_HANDLE or surface == VK_NULL_HANDLE) {
       vo__assert(0);
@@ -189,39 +193,36 @@ namespace queuefamily
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
 
     // . Indices to find
-    std::optional<uint32_t> graphicsIndex;
-    std::optional<uint32_t> presentIndex;
-    auto const              isComplete = [&]() { return graphicsIndex.has_value() && presentIndex.has_value(); };
+    IndicesOpt indicesOpt;
 
     // . Find
-    for (uint32_t i = 0u; (!isComplete() and i < queueFamilies.size()); ++i) {
+    for (uint32_t i = 0u; (!isComplete(indicesOpt) and i < queueFamilies.size()); ++i) {
       // .. Graphics
-      if (queueFamilies.at(i).queueFlags & VK_QUEUE_GRAPHICS_BIT) { graphicsIndex = i; }
+      if (queueFamilies.at(i).queueFlags & VK_QUEUE_GRAPHICS_BIT) { indicesOpt.graphics = i; }
       // .. Present
       VkBool32 presentSupport = false;
       vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
-      if (presentSupport) { presentIndex = i; }
+      if (presentSupport) { indicesOpt.present = i; }
     }
 
-    std::vector<std::optional<uint32_t>> indices(2);
-    indices[Type::graphics] = graphicsIndex;
-    indices[Type::present]  = presentIndex;
-    return indices;
+    return indicesOpt;
   }
 
   //-----------------------------------------------
 
-  std::vector<VkQueue> findQueues(VkDevice device, std::vector<uint32_t> const &indices)
+  Queues_t findQueues(VkDevice device, QueueIndices_t const &indices)
   {
-    std::vector<VkQueue> queues(2);
-    vkGetDeviceQueue(device, indices[Type::graphics], 0, &queues[Type::graphics]);
-    vkGetDeviceQueue(device, indices[Type::present], 0, &queues[Type::present]);
+    Queues_t queues;
+    vkGetDeviceQueue(device, indices.graphics, 0, &queues.graphics);
+    vkGetDeviceQueue(device, indices.present, 0, &queues.present);
+    // vkGetDeviceQueue(device, indices.compute, 0, &queues.compute);
+    // vkGetDeviceQueue(device, indices.transfer, 0, &queues.transfer);
     return queues;
   }
 
   //-----------------------------------------------
 
-}  // namespace queuefamily
+}  // namespace queue
 
 //=============================================================================
 
@@ -236,79 +237,115 @@ namespace swapchain
 
   //---------------------------------------------
 
-  std::tuple<VkSurfaceCapabilitiesKHR, std::vector<VkPresentModeKHR>, std::vector<VkSurfaceFormatKHR>> getSupportData(
-    VkPhysicalDevice physicalDevice,
-    VkSurfaceKHR     surface)
+  SupportSurface getSupportData(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
   {
-    VkSurfaceCapabilitiesKHR        capabilities;
-    std::vector<VkPresentModeKHR>   presentModes;
-    std::vector<VkSurfaceFormatKHR> surfaceFormats;
+    SupportSurface ssurf;
 
     // . Capabilities
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &ssurf.caps);
+
     // . Surface Formats
     uint32_t formatCount;
     vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
     if (formatCount != 0) {
-      surfaceFormats.resize(formatCount);
-      vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, surfaceFormats.data());
+      ssurf.formats.resize(formatCount);
+      vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, ssurf.formats.data());
     }
+
     // . Present modes
     uint32_t presentModeCount;
     vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
     if (presentModeCount != 0) {
-      presentModes.resize(presentModeCount);
-      vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data());
+      ssurf.presentModes.resize(presentModeCount);
+      vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, ssurf.presentModes.data());
     }
 
-    return { capabilities, presentModes, surfaceFormats };
+    return ssurf;
   }
 
   //---------------------------------------------
 
   bool isEmpty(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
   {
-    auto const [capabilities, presentModes, surfaceFormats] = getSupportData(physicalDevice, surface);
-    return presentModes.empty() or surfaceFormats.empty();
+    auto const surfSupp = getSupportData(physicalDevice, surface);
+    return surfSupp.presentModes.empty() or surfSupp.formats.empty();
   }
 
   //---------------------------------------------
 
-  Settings getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, Settings rs)
+  SwapShainSettings_t getSettings(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, SwapShainSettings_t rs)
   {
-    Settings scs;
-    auto const [capabilities, presentModes, surfaceFormats] = getSupportData(physicalDevice, surface);
+    SwapShainSettings_t scs;
+    scs.vsync        = rs.vsync;
+    auto const ssurf = getSupportData(physicalDevice, surface);
 
     // . [capabilities] - Direct store
-    scs.capabilities = capabilities;
+    scs.capabilities = ssurf.caps;
 
     // . [capabilities] - Get max allowed image to get in queue
-    scs.minImageCount = capabilities.minImageCount + 1;
-    if (capabilities.maxImageCount > 0 and scs.minImageCount > capabilities.maxImageCount) {
-      scs.minImageCount = capabilities.maxImageCount;
+    scs.minImageCount = ssurf.caps.minImageCount + 1;
+    if (ssurf.caps.maxImageCount > 0 and scs.minImageCount > ssurf.caps.maxImageCount) {
+      scs.minImageCount = ssurf.caps.maxImageCount;
     }
 
     // . [capabilities] - Get best extent
-    if (capabilities.currentExtent.width != UINT32_MAX) {
-      scs.extent2D = capabilities.currentExtent;
+    if (ssurf.caps.currentExtent.width != UINT32_MAX) {
+      scs.extent2D = ssurf.caps.currentExtent;
     } else {
       uint32_t    w   = rs.extent2D.width;
       uint32_t    h   = rs.extent2D.height;
-      auto const &min = capabilities.minImageExtent;
-      auto const &max = capabilities.maxImageExtent;
+      auto const &min = ssurf.caps.minImageExtent;
+      auto const &max = ssurf.caps.maxImageExtent;
       scs.extent2D    = VkExtent2D { std::clamp(w, min.width, max.width), std::clamp(h, min.height, max.height) };
     }
 
+    // . [capabilities] - Get best transformation
+    if (ssurf.caps.supportedTransforms & rs.preTransformFlag) {
+      scs.preTransformFlag = rs.preTransformFlag;
+    } else {
+      scs.preTransformFlag = ssurf.caps.currentTransform;
+    }
+
+    // . [capabilities] - Get best alpha-composite
+    if (ssurf.caps.supportedCompositeAlpha & rs.compositeAlphaFlag) {
+      scs.compositeAlphaFlag = rs.compositeAlphaFlag;
+    } else {
+      static std::vector<VkCompositeAlphaFlagBitsKHR> const compositeAlphaFlags = {
+        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+        VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+        VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+      };
+      for (auto &compositeAlphaFlag : compositeAlphaFlags) {
+        if (ssurf.caps.supportedCompositeAlpha & compositeAlphaFlag) {
+          scs.compositeAlphaFlag = compositeAlphaFlag;
+          break;
+        };
+      }
+    }
+
+    // . [capabilities] - Get image usage flags
+    if (ssurf.caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+      scs.extraImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+    if (ssurf.caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
+      scs.extraImageUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    }
+
     // . [presentModes] - Get best
-    // VK_PRESENT_MODE_MAILBOX_KHR : Render as fast as possible while still avoiding tearing : vsync + triple-buffer
-    // VK_PRESENT_MODE_FIFO_KHR    : Guaranteed to be available : vsync + double-buffer
+    // * VK_PRESENT_MODE_FIFO_KHR    : Guaranteed to be available : vsync + double-buffer
+    // * VK_PRESENT_MODE_MAILBOX_KHR :
+    //    Render as fast as possible while still avoiding tearing : close to vsync + triple-buffer
+    //    NOTE: Do not use it on mobiles due to power-consumption !!
     scs.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // fallback
-    if (std::find(presentModes.begin(), presentModes.end(), rs.presentMode) != presentModes.end()) {
-      scs.presentMode = rs.presentMode;
+    if (!scs.vsync) {
+      if (std::find(ssurf.presentModes.begin(), ssurf.presentModes.end(), rs.presentMode) != ssurf.presentModes.end()) {
+        scs.presentMode = rs.presentMode;
+      }
     }
 
     // . [surfaceFormat] - Get best
-    for (const auto &available : surfaceFormats) {
+    for (const auto &available : ssurf.formats) {
       bool const sameFormat     = available.format == rs.surfaceFormat.format;
       bool const sameColorSpace = available.colorSpace == rs.surfaceFormat.colorSpace;
       if (sameFormat and sameColorSpace) { scs.surfaceFormat = available; }
@@ -317,16 +354,16 @@ namespace swapchain
     return scs;
   }
 
-  //---------------------------------------------
+  // //---------------------------------------------
 
-  void Settings::dumpInfo() const
-  {
-    vo__info("- SwapChainSettings -");
-    vo__infof("Image Count             : {}", minImageCount);
-    vo__infof("Selected Extent 2D      : ({},{})", extent2D.width, extent2D.height);
-    vo__infof("Selected Present Mode   : {}", vku::ToStr_PresentMode.at(presentMode));
-    vo__infof("Selected Surface Format : {}", vku::ToStr_Format.at(surfaceFormat.format));
-  }
+  // void SwapShainSettings_t::dumpInfo() const
+  // {
+  //   vo__info("- SwapChainSettings -");
+  //   vo__infof("Image Count             : {}", minImageCount);
+  //   vo__infof("Selected Extent 2D      : ({},{})", extent2D.width, extent2D.height);
+  //   vo__infof("Selected Present Mode   : {}", vku::ToStr_PresentMode.at(presentMode));
+  //   vo__infof("Selected Surface Format : {}", vku::ToStr_Format.at(surfaceFormat.format));
+  // }
 
   //---------------------------------------------
 
@@ -347,7 +384,7 @@ namespace shaders
 
   std::string getPath(char const *shaderName, VkShaderStageFlagBits stage)
   {
-    static std::unordered_map<VkShaderStageFlagBits, std::string> stageToExtension {
+    static std::unordered_map<VkShaderStageFlagBits, std::string> sStageToExtension {
       { VK_SHADER_STAGE_VERTEX_BIT, "vert" },
       { VK_SHADER_STAGE_FRAGMENT_BIT, "frag" },
       { VK_SHADER_STAGE_COMPUTE_BIT, "comp" },
@@ -357,7 +394,7 @@ namespace shaders
     };
 
     static auto const VwShadersPath = std::string("./assets/shaders/");  // get this path from #define
-    return VwShadersPath + shaderName + "." + stageToExtension[stage] + ".spv";
+    return VwShadersPath + shaderName + "." + sStageToExtension[stage] + ".spv";
   };
 
   //---------------------------------------------
@@ -369,23 +406,23 @@ namespace shaders
     auto const code = vo::files::read(path);
     if (code.empty()) { vo__errf("Failed to open shader '{}'!", path); }
 
-    VkShaderModuleCreateInfo const shadermoduleCreateInfo {
+    VkShaderModuleCreateInfo const shadermoduleCI {
       .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
       .codeSize = vku__castsize(code.size()),
       .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
     };
 
-    VkShaderModule shaderModule;
-    vku__check(vkCreateShaderModule(logicalDevice, &shadermoduleCreateInfo, nullptr, &shaderModule));
+    VkShaderModule shadermodule;
+    vku__check(vkCreateShaderModule(logicalDevice, &shadermoduleCI, nullptr, &shadermodule));
 
-    VkPipelineShaderStageCreateInfo shaderStageInfo {
+    VkPipelineShaderStageCreateInfo shaderStageCI {
       .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage  = stage,
-      .module = shaderModule,
+      .module = shadermodule,
       .pName  = "main",  // Entrypoint function name
     };
 
-    return { path, shaderModule, shaderStageInfo };
+    return { path, shadermodule, shaderStageCI };
   }
 
   //---------------------------------------------
