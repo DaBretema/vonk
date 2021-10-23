@@ -408,7 +408,7 @@ namespace shaders
 
     VkShaderModuleCreateInfo const shadermoduleCI {
       .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = vku__castsize(code.size()),
+      .codeSize = vku__getSize(code),
       .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
     };
 

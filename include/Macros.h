@@ -70,7 +70,9 @@ static inline auto const VO_TRACE = [](int lvl, auto msg) {
   if (VkResult res = vulkanCode; res != VK_SUCCESS) { vo__abortf("{} : {}", res, #vulkanCode); }
 
 // ::: Cast shortcut
-#define vku__castsize(v) static_cast<uint32_t>(v)
+#define vku__castSize(v) static_cast<uint32_t>(v)
+#define vku__getSize(v)  vku__castSize(v.size())
+#define vku__getData(v)  v.data()
 
 // ::: Get instance functions
 #define vku__instanceFn(instance, extName, ...)                                   \

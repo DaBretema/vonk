@@ -1,21 +1,29 @@
 #pragma once
 #include "_vulkan.h"
 
+#include "Macros.h"
+
 #include <string>
 #include <unordered_map>
 
 namespace vo::vulkan
 {  //
 
+//=============================================================================
+
 struct QueueIndices_t
 {
   uint32_t graphics, present;  //, compute, transfer;
 };
 
+//-----------------------------------------------
+
 struct Queues_t
 {
   VkQueue graphics, present;  //, compute, transfer;
 };
+
+//-----------------------------------------------
 
 struct SwapShainSettings_t
 {
@@ -30,11 +38,9 @@ struct SwapShainSettings_t
   VkSurfaceTransformFlagBitsKHR preTransformFlag     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
   VkCompositeAlphaFlagBitsKHR   compositeAlphaFlag   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   VkImageUsageFlags             extraImageUsageFlags = {};
-
-  // void dumpInfo() const;
 };
 
-//----
+//=============================================================================
 
 struct Instance_t
 {
@@ -42,6 +48,8 @@ struct Instance_t
   VkDebugUtilsMessengerEXT debugger;
   VkSurfaceKHR             surface;
 };
+
+//-----------------------------------------------
 
 struct Gpu_t
 {
@@ -53,6 +61,8 @@ struct Gpu_t
   QueueIndices_t                   queuesIndices;
 };
 
+//-----------------------------------------------
+
 struct Device_t
 {
   VkDevice handle = VK_NULL_HANDLE;
@@ -63,6 +73,8 @@ struct Device_t
   VkCommandPool commandPool = VK_NULL_HANDLE;
 };
 
+//-----------------------------------------------
+
 struct SwapChain_t
 {
   VkSwapchainKHR           handle = VK_NULL_HANDLE;
@@ -70,6 +82,8 @@ struct SwapChain_t
   std::vector<VkImage>     images;
   std::vector<VkImageView> views;
 };
+
+//-----------------------------------------------
 
 struct SyncBase_t
 {
@@ -85,8 +99,94 @@ struct SyncBase_t
   } fences;
 };
 
-struct GraphicsPipeline_t
+//-----------------------------------------------
+
+struct RenderPassData_t
 {
+  std::vector<VkAttachmentDescription> attachments;
+  std::vector<VkAttachmentReference>   attachmentRefs;
+  std::vector<VkSubpassDescription>    subpassDescs;
+  std::vector<VkSubpassDependency>     subpassDeps;
+};
+
+//-----------------------------------------------
+
+struct FixedFuncs_t
+{
+  // . ViewportState
+  std::vector<VkViewport>           viewports;
+  std::vector<VkRect2D>             scissors;
+  VkPipelineViewportStateCreateInfo viewportStateCI;
+  // . Rasterization
+  VkPipelineRasterizationStateCreateInfo rasterizationStateCI;
+  // . Multisampling : Default OFF
+  VkPipelineMultisampleStateCreateInfo multisamplingCI;
+  // . Depth / Stencil
+  VkPipelineDepthStencilStateCreateInfo depthstencilCI;
+  // . Blending
+  std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
+  VkPipelineColorBlendStateCreateInfo              blendingCI;
+};
+
+//-----------------------------------------------
+
+struct PipelineLayoutData_t
+{
+  // . Used for: vku__check(vkCreatePipelineLayout(mDevice.handle, &pipelineLayoutCI, nullptr, &mPipeline.layout));
+  VkPipelineLayoutCreateInfo pipelineLayoutCI {
+    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+    .setLayoutCount         = 0,        // Optional
+    .pSetLayouts            = nullptr,  // Optional
+    .pushConstantRangeCount = 0,        // Optional
+    .pPushConstantRanges    = nullptr,  // Optional
+  };
+
+  // . Input-State Vertex : Probably tends to grow with the 'pipelineLayout'
+  VkPipelineVertexInputStateCreateInfo inputstateVertexCI {
+    .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .vertexBindingDescriptionCount   = 0,
+    .pVertexBindingDescriptions      = nullptr,  // Optional
+    .vertexAttributeDescriptionCount = 0,
+    .pVertexAttributeDescriptions    = nullptr,  // Optional
+  };
+
+  // . Input-State Assembly : Probably could be 'static'
+  VkPipelineInputAssemblyStateCreateInfo inputstateAssemblyCI {
+    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+    .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    .primitiveRestartEnable = VK_FALSE,
+  };
+};
+
+//-----------------------------------------------
+
+struct CommandBufferData_t
+{
+  VkClearColorValue                    clearColor        = { { 0.0175f, 0.0f, 0.0175f, 1.0f } };
+  VkClearDepthStencilValue             clearDephtStencil = { 1.f, 0 };
+  MBU uint32_t                         renderPassIdx     = 0u;
+  std::function<void(VkCommandBuffer)> commands          = nullptr;
+};
+using CommandBuffersData_t = std::vector<CommandBufferData_t>;
+
+//-----------------------------------------------
+
+using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>;
+
+//-----------------------------------------------
+
+struct PipelineCreateInfo_t
+{
+  FixedFuncs_t         fixedFuncs;
+  RenderPassData_t     renderPassData;
+  PipelineLayoutData_t pipelineLayoutData;
+  ShadersData_t        shadersData;
+  CommandBuffersData_t commandBuffersData;
+};
+
+struct Pipeline_t
+{
+  PipelineCreateInfo_t                            _CreateInfo;
   VkPipeline                                      handle;
   VkRenderPass                                    renderpass;
   std::vector<VkFramebuffer>                      frameBuffers;
@@ -95,5 +195,8 @@ struct GraphicsPipeline_t
   std::unordered_map<std::string, VkShaderModule> shaderModules;
   std::vector<VkCommandBuffer>                    commandBuffers;
 };
+using Scenes_t = std::vector<Pipeline_t>;
+
+//-----------------------------------------------
 
 }  // namespace vo::vulkan

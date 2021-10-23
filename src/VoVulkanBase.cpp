@@ -1,5 +1,5 @@
 #include "VoVulkanBase.h"
-#include "VoVulkanInit.h"
+// #include "VoVulkanCreators.h"
 #include "VoVulkanUtils.h"
 #include "VoWindow.h"
 
@@ -92,7 +92,7 @@ void Base::drawFrame()
     .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
     .pWaitDstStageMask    = waitStages,
     .commandBufferCount   = 1,
-    .pCommandBuffers      = &mDrawPipeline.commandBuffers[imageIndex],
+    .pCommandBuffers      = &mScenes[activeScene].commandBuffers[imageIndex],
     .waitSemaphoreCount   = 1,
     .pWaitSemaphores      = waitSemaphores,
     .signalSemaphoreCount = 1,
@@ -222,14 +222,14 @@ void Base::init()
     .sType            = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     .pEnabledFeatures = &mGpu.features,
     // Queues info
-    .queueCreateInfoCount = vku__castsize(queueCIs.size()),
-    .pQueueCreateInfos    = queueCIs.data(),
+    .queueCreateInfoCount = vku__getSize(queueCIs),
+    .pQueueCreateInfos    = vku__getData(queueCIs),
     // Set device extensions
-    .enabledExtensionCount   = vku__castsize(vo::sDeviceExtensions.size()),
-    .ppEnabledExtensionNames = vo::sDeviceExtensions.data(),
+    .enabledExtensionCount   = vku__getSize(vo::sDeviceExtensions),
+    .ppEnabledExtensionNames = vku__getData(vo::sDeviceExtensions),
     // Set device validation layers
-    .enabledLayerCount   = vku__castsize(vo::sValidationLayers.size()),
-    .ppEnabledLayerNames = vo::sValidationLayers.data(),
+    .enabledLayerCount   = vku__getSize(vo::sValidationLayers),
+    .ppEnabledLayerNames = vku__getData(vo::sValidationLayers),
   };
 
   // . Create Device !
@@ -275,7 +275,6 @@ void Base::init()
   //=====   CREATE SWAPCHAIN  (DEFAULT "FBO")
 
   swapchainCreate();
-  graphicspipelineCreateHARDCODED();
 
 }  // void Base::init()
 
@@ -286,8 +285,21 @@ void Base::cleanup()
   //=====
   //=====   USER DEFINED
 
-  for (auto [name, shaderModule] : mDrawPipeline.shaderModules) {
-    vkDestroyShaderModule(mDevice.handle, shaderModule, nullptr);
+  for (auto &scene : mScenes) {
+    for (auto framebuffer : scene.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
+
+    auto &cb = scene.commandBuffers;
+    if (cb.size() > 0) {
+      vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__getSize(cb), vku__getData(cb));
+    }
+
+    vkDestroyPipeline(mDevice.handle, scene.handle, nullptr);
+    vkDestroyPipelineLayout(mDevice.handle, scene.layout, nullptr);
+    vkDestroyRenderPass(mDevice.handle, scene.renderpass, nullptr);  // after: mPipelineLayout
+
+    for (auto [name, shaderModule] : scene.shaderModules) {
+      vkDestroyShaderModule(mDevice.handle, shaderModule, nullptr);
+    }
   }
 
   //=====
@@ -313,6 +325,8 @@ void Base::cleanup()
 }  // void Base::cleanup()
 
 //-----------------------------------------------
+//-----------------------------------------------
+//-----------------------------------------------
 
 void Base::swapchainCreate()
 {
@@ -323,7 +337,7 @@ void Base::swapchainCreate()
     SwapShainSettings_t { true, vo::window::getFramebufferSize() });
 
   // . Create SwapChain
-  bool const        gpSameQueue = mDevice.queues.graphics == mDevice.queues.present;
+  bool const        gpDiffQueue = mDevice.queues.graphics != mDevice.queues.present;
   std::vector const gpIndices   = { mDevice.queuesIndices.graphics, mDevice.queuesIndices.present };
 
   VkSwapchainCreateInfoKHR const swapchainCI {
@@ -342,9 +356,9 @@ void Base::swapchainCreate()
     .imageColorSpace  = mSwapChain.settings.surfaceFormat.colorSpace,
     .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | mSwapChain.settings.extraImageUsageFlags,
 
-    .imageSharingMode      = gpSameQueue ? VK_SHARING_MODE_EXCLUSIVE : VK_SHARING_MODE_CONCURRENT,
-    .queueFamilyIndexCount = gpSameQueue ? 0 : vku__castsize(gpIndices.size()),
-    .pQueueFamilyIndices   = gpSameQueue ? nullptr : gpIndices.data(),
+    .imageSharingMode      = gpDiffQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = gpDiffQueue ? vku__getSize(gpIndices) : 0,
+    .pQueueFamilyIndices   = gpDiffQueue ? vku__getData(gpIndices) : nullptr,
 
     .oldSwapchain = mSwapChain.handle  // -> Better cleanup + ensure that we can still present already acquired images
   };
@@ -383,14 +397,18 @@ void Base::swapchainCreate()
 
 void Base::swapchainCleanUp()
 {
-  for (auto framebuffer : mDrawPipeline.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
+  // for (auto &scene : mScenes) {
+  //   for (auto framebuffer : scene.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
 
-  auto &cb = mDrawPipeline.commandBuffers;
-  if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__castsize(cb.size()), cb.data()); }
+  //   auto &cb = scene.commandBuffers;
+  //   if (cb.size() > 0) {
+  //     vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__getSize(cb), vku__getData(cb));
+  //   }
 
-  vkDestroyPipeline(mDevice.handle, mDrawPipeline.handle, nullptr);
-  vkDestroyPipelineLayout(mDevice.handle, mDrawPipeline.layout, nullptr);
-  vkDestroyRenderPass(mDevice.handle, mDrawPipeline.renderpass, nullptr);  // after: mPipelineLayout
+  //   vkDestroyPipeline(mDevice.handle, scene.handle, nullptr);
+  //   vkDestroyPipelineLayout(mDevice.handle, scene.layout, nullptr);
+  //   vkDestroyRenderPass(mDevice.handle, scene.renderpass, nullptr);  // after: mPipelineLayout
+  // }
 
   for (auto imageView : mSwapChain.views) { vkDestroyImageView(mDevice.handle, imageView, nullptr); }
 
@@ -405,334 +423,12 @@ void Base::swapchainReCreate()
   vkDeviceWaitIdle(mDevice.handle);
   swapchainCleanUp();
   swapchainCreate();
-  graphicspipelineCreateHARDCODED();
-  // mGraphicsPipeline.recreate();
+  // graphicspipelineCreateHARDCODED();
+  // for (auto &scene : mScenes) {
+  //   // mGraphicsPipeline.recreate();
+  // }
 }
 
 //-----------------------------------------------
-
-// @DANI this is temporal and should be replaced by user code to define multiple scenes...
-void Base::graphicspipelineCreateHARDCODED()
-{
-  //=====
-  //=====   CREATE SUB-PASS
-
-  // . Attachment References
-  VkAttachmentReference const subpassColorAttRef {
-    .attachment = 0,
-    .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-  };
-
-  // . Description
-  VkSubpassDescription const subpassDesc {
-    // Every subpass references one or more of the attachments using VkAttachmentReference.
-    // This allows attachment resuse between render-subpasses.
-    .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,  // also could be: Compute or Raytracing
-    .colorAttachmentCount = 1,
-    .pColorAttachments    = &subpassColorAttRef,
-  };
-
-  // . Subpass dependencies (required for user-defined subpasses and 'implicit' ones)
-  VkSubpassDependency subpassDeps {
-    .srcSubpass    = VK_SUBPASS_EXTERNAL,
-    .dstSubpass    = 0,
-    .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .srcAccessMask = 0,
-    .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-  };
-
-  //=====
-  //=====   CREATE RENDER-PASS
-
-  // . Attachment
-  VkAttachmentDescription const renderpassColorAtt {
-    .format  = mSwapChain.settings.surfaceFormat.format,
-    .samples = VK_SAMPLE_COUNT_1_BIT,  // VK_SAMPLE_COUNT_1_BIT for No-Multisampling
-    // * Ops
-    // VkAttachmentDescription.loadOp
-    //  - VK_ATTACHMENT_LOAD_OP_LOAD      : Preserve the existing contents of the attachment.
-    //  - VK_ATTACHMENT_LOAD_OP_CLEAR     : Clear the values to a constant (clear color) at the start.
-    //  - VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them.
-    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-    // VkAttachmentDescription.storeOp
-    //  - VK_ATTACHMENT_STORE_OP_STORE     : Rendered contents will be stored in memory and can be read later.
-    //  - VK_ATTACHMENT_STORE_OP_DONT_CARE : Contents of the framebuffer will be undefined after the rendering op.
-    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-    // * Stencil
-    .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-    // * Layouts
-    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    .finalLayout   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-  };
-
-  // . RenderPass create info
-  VkRenderPassCreateInfo const renderpassCI {
-    .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-    .attachmentCount = 1,
-    .pAttachments    = &renderpassColorAtt,
-    .subpassCount    = 1,
-    .pSubpasses      = &subpassDesc,
-    .dependencyCount = 1,
-    .pDependencies   = &subpassDeps,
-  };
-
-  // . Creation
-  vku__check(vkCreateRenderPass(mDevice.handle, &renderpassCI, nullptr, &mDrawPipeline.renderpass));
-
-  //=====
-  //=====   CREATE IMAGE-VIEWS' FRAMEBUFFERS FOR CURRENT THIS RENDERPASS
-
-  mDrawPipeline.frameBuffers.resize(mSwapChain.views.size());
-
-  for (size_t i = 0; i < mSwapChain.views.size(); ++i) {
-    VkImageView const             attachments[] = { mSwapChain.views[i] };
-    VkFramebufferCreateInfo const framebufferCI {
-      .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-      .renderPass      = mDrawPipeline.renderpass,
-      .attachmentCount = 1,  // Modify this for MRT ??
-      .pAttachments    = attachments,
-      .width           = mSwapChain.settings.extent2D.width,
-      .height          = mSwapChain.settings.extent2D.height,
-      .layers          = 1,
-    };
-    vku__check(vkCreateFramebuffer(mDevice.handle, &framebufferCI, nullptr, &mDrawPipeline.frameBuffers[i]));
-  }
-
-  //=====
-  //=====   FIXED FUNCTIONS
-
-  // . Viewport
-  // ..  Base
-  VkViewport const viewport {
-    .x        = 0.0f,
-    .y        = 0.0f,
-    .width    = (float)mSwapChain.settings.extent2D.width,
-    .height   = (float)mSwapChain.settings.extent2D.height,
-    .minDepth = 0.0f,
-    .maxDepth = 1.0f,
-  };
-  // ..  Scissor
-  VkRect2D const scissor {
-    .offset = { 0, 0 },
-    .extent = mSwapChain.settings.extent2D,
-  };
-  // ..  CreateInfo
-  VkPipelineViewportStateCreateInfo const viewportStateCI {
-    .sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-    .viewportCount = 1,
-    .pViewports    = &viewport,
-    .scissorCount  = 1,
-    .pScissors     = &scissor,
-  };
-
-  // . Rasterization
-  VkPipelineRasterizationStateCreateInfo const rasterizationStateCI {
-    .sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-    .polygonMode = VK_POLYGON_MODE_FILL,  // or _LINE / _POINT as always
-    .cullMode    = VK_CULL_MODE_BACK_BIT,
-    .frontFace   = VK_FRONT_FACE_CLOCKWISE,  // or VK_FRONT_FACE_COUNTER_CLOCKWISE
-    .lineWidth   = 1.0f,
-    // Disable any output
-    .rasterizerDiscardEnable = VK_FALSE,
-    // Usefull for Shadow-Maps
-    .depthClampEnable        = VK_FALSE,
-    .depthBiasEnable         = VK_FALSE,
-    .depthBiasConstantFactor = 0.0f,  // Optional
-    .depthBiasClamp          = 0.0f,  // Optional
-    .depthBiasSlopeFactor    = 0.0f,  // Optional
-  };
-
-  // . Multisampling : Currently OFF
-  VkPipelineMultisampleStateCreateInfo const multisamplingCI {
-    .sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-    .sampleShadingEnable   = VK_FALSE,
-    .rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
-    .minSampleShading      = 1.0f,      // Optional
-    .pSampleMask           = nullptr,   // Optional
-    .alphaToCoverageEnable = VK_FALSE,  // Optional
-    .alphaToOneEnable      = VK_FALSE,  // Optional
-  };
-
-  // . Depth / Stencil
-  VkPipelineDepthStencilStateCreateInfo const depthstencilCI {
-    .sType             = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-    .stencilTestEnable = VK_FALSE,
-    .depthWriteEnable  = VK_TRUE,
-    .depthTestEnable   = VK_TRUE,
-    .depthCompareOp    = VkCompareOp::VK_COMPARE_OP_LESS,
-  };
-
-  // . Blending
-  // ..  Define blending logic
-  VkPipelineColorBlendAttachmentState const colorblendStateAtt {
-    .colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-    // * Color pass through
-    .blendEnable         = VK_FALSE,
-    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,   // Optional
-    .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,  // Optional
-    .colorBlendOp        = VK_BLEND_OP_ADD,       // Optional
-    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,   // Optional
-    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,  // Optional
-    .alphaBlendOp        = VK_BLEND_OP_ADD,       // Optional
-    // * Classic alpha blending
-    // .blendEnable         = VK_TRUE,
-    // .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-    // .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-    // .colorBlendOp        = VK_BLEND_OP_ADD,
-    // .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-    // .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-    // .alphaBlendOp        = VK_BLEND_OP_ADD,
-  };
-  // ..  Create Info
-  VkPipelineColorBlendStateCreateInfo const colorblendStateCI {
-    .sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-    .logicOpEnable     = VK_FALSE,
-    .logicOp           = VK_LOGIC_OP_COPY,  // Optional
-    .attachmentCount   = 1,
-    .pAttachments      = &colorblendStateAtt,
-    .blendConstants[0] = 0.0f,  // Optional
-    .blendConstants[1] = 0.0f,  // Optional
-    .blendConstants[2] = 0.0f,  // Optional
-    .blendConstants[3] = 0.0f,  // Optional
-  };
-
-  //=====
-  //=====   GRAPHICS PIPELINE
-
-  // . Dynamic State
-  // ..  Things where apply a Dynamic Behaviour
-  VkDynamicState const dynamicStates[] = {
-    VK_DYNAMIC_STATE_VIEWPORT,   //
-    VK_DYNAMIC_STATE_LINE_WIDTH  //
-  };
-  // ..  Create Info
-  MBU VkPipelineDynamicStateCreateInfo const dynamicStateCI {
-    .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-    .dynamicStateCount = 2,
-    .pDynamicStates    = dynamicStates,
-  };
-
-  // . (?) Descriptors
-  // ..  Pipeline Layout : This will grow up when using -Descriptors-
-  VkPipelineLayoutCreateInfo const pipelineLayoutCI {
-    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-    .setLayoutCount         = 0,        // Optional
-    .pSetLayouts            = nullptr,  // Optional
-    .pushConstantRangeCount = 0,        // Optional
-    .pPushConstantRanges    = nullptr,  // Optional
-  };
-  vku__check(vkCreatePipelineLayout(mDevice.handle, &pipelineLayoutCI, nullptr, &mDrawPipeline.layout));
-  // ..  Input-State Vertex : Probably tends to grow with the 'pipelineLayout'
-  VkPipelineVertexInputStateCreateInfo const inputstateVertexCI {
-    .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-    .vertexBindingDescriptionCount   = 0,
-    .pVertexBindingDescriptions      = nullptr,  // Optional
-    .vertexAttributeDescriptionCount = 0,
-    .pVertexAttributeDescriptions    = nullptr,  // Optional
-  };
-  // ..  Input-State Assembly : Probably could be 'static'
-  VkPipelineInputAssemblyStateCreateInfo const inputstateAssemblyCI {
-    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-    .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-    .primitiveRestartEnable = VK_FALSE,
-  };
-
-  // . Pipeline
-
-  // ..  Populate shaders
-  static auto const createShadersSameName =
-    [&](std::string const &name, std::initializer_list<VkShaderStageFlagBits> stages) {
-      for (auto const stage : stages) {
-        auto const data = vku::shaders::create(mDevice.handle, name, stage);
-        mDrawPipeline.shaderModules.emplace(data.path, data.module);
-        mDrawPipeline.stagesCI.emplace_back(data.stageCreateInfo);
-      }
-    };
-  MBU static int const do_once = [&]() {
-    createShadersSameName("base", { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT });
-    return 1;
-  }();
-
-  // ..  Create Info
-  VkGraphicsPipelineCreateInfo const graphicsPipelineCI {
-    .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-    .stageCount          = vku__castsize(mDrawPipeline.stagesCI.size()),
-    .pStages             = mDrawPipeline.stagesCI.data(),
-    .pVertexInputState   = &inputstateVertexCI,
-    .pInputAssemblyState = &inputstateAssemblyCI,
-    .pViewportState      = &viewportStateCI,
-    .pRasterizationState = &rasterizationStateCI,
-    .pMultisampleState   = &multisamplingCI,
-    .pDepthStencilState  = &depthstencilCI,  // Optional
-    .pColorBlendState    = &colorblendStateCI,
-    .pDynamicState       = &dynamicStateCI,  // Optional
-    .layout              = mDrawPipeline.layout,
-    .renderPass          = mDrawPipeline.renderpass,
-    .subpass             = 0,               // index of subpass (or first subpass, not sure yet...)
-    .basePipelineHandle  = VK_NULL_HANDLE,  // Optional
-    .basePipelineIndex   = -1,              // Optional
-  };
-  // ..  Creation
-  vku__check(
-    vkCreateGraphicsPipelines(mDevice.handle, VK_NULL_HANDLE, 1, &graphicsPipelineCI, nullptr, &mDrawPipeline.handle));
-
-  //=====
-  //=====   COMMAND BUFFERS
-  auto &cbs = mDrawPipeline.commandBuffers;
-
-  // . Allocation
-  cbs.resize(mDrawPipeline.frameBuffers.size());
-
-  VkCommandBufferAllocateInfo const allocInfo {
-    .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool        = mDevice.commandPool,
-    .commandBufferCount = vku__castsize(cbs.size()),
-    // NOTE: The VkCommandBufferAllocateInfo.level parameter specifies:
-    // - VK_COMMAND_BUFFER_LEVEL_PRIMARY:    [V] Submitted to a queue for execution.   [X] Called from others.
-    // - VK_COMMAND_BUFFER_LEVEL_SECONDARY:  [V] Called from primary command buffers.  [X] Submitted directly.
-    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-  };
-
-  vku__check(vkAllocateCommandBuffers(mDevice.handle, &allocInfo, cbs.data()));
-
-  // . Recording : Define needed structs
-
-  VkClearValue const clearColor { { { 0.0175f, 0.0f, 0.0175f, 1.0f } } };  // @DANI : Put this in global access
-
-  VkCommandBufferBeginInfo const commandBufferBI {
-    .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    .flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,  // @DANI : Review
-    .pInheritanceInfo = nullptr,                                       // Optional
-  };
-
-  VkRenderPassBeginInfo /* const */ renderpassBI {
-    .sType      = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-    .renderPass = mDrawPipeline.renderpass,
-    // .framebuffer       = this->swapchainFramebuffers[i],
-    .renderArea.offset = { 0, 0 },
-    .renderArea.extent = mSwapChain.settings.extent2D,
-    .clearValueCount   = 1,
-    .pClearValues      = &clearColor,
-  };
-
-  // . Recording
-
-  for (size_t i = 0; i < cbs.size(); ++i) {
-    renderpassBI.framebuffer = mDrawPipeline.frameBuffers[i];
-    vku__check(vkBeginCommandBuffer(cbs[i], &commandBufferBI));
-    vkCmdBeginRenderPass(cbs[i], &renderpassBI, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cbs[i], VK_PIPELINE_BIND_POINT_GRAPHICS, mDrawPipeline.handle);
-    vkCmdSetViewport(cbs[i], 0, 1, &viewport);  // -> If Dynamic Viewport
-    vkCmdDraw(cbs[i], 6, 1, 0, 0);
-    vkCmdEndRenderPass(cbs[i]);
-    vku__check(vkEndCommandBuffer(cbs[i]));
-  }
-
-  //=====
-
-}  // void Base::createGraphicsPipeline()
 
 }  // namespace vo::vulkan
