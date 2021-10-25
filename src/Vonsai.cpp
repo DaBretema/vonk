@@ -20,11 +20,22 @@ namespace vo
 void Vonsai::run()
 {
   //===== Window
-
   vo::window::init(mW, mH, "Vonsai");
 
   //===== Vulkan Create
   mVulkan.init();
+
+  //===== Vulkan-Window linking
+  vo::window::setUserPointer(&mVulkan);
+
+  //===== Vulkan-Window setup
+  // . Keyboard input
+  vo::window::setCallbackKeyboard(
+    [](MBU GLFWwindow *windowHandle, int key, MBU int scancode, int action, MBU int mods) {
+      auto *vku = static_cast<vku::Base *>(vo::window::userPtr);  // Cast UserPtr before use it.
+
+      if (key == GLFW_KEY_1 and action == GLFW_PRESS) { vku->iterScenes(); }
+    });
 
   //===== Define actions
 
@@ -84,8 +95,8 @@ void Vonsai::run()
   pipelineCI2.shadersData = { { "base2", VK_SHADER_STAGE_VERTEX_BIT }, { "base", VK_SHADER_STAGE_FRAGMENT_BIT } },
   pipelineCI2.commandBuffersData = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 6, 1, 0, 0); } } },
 
-  // mVulkan.addPipeline(pipelineCI);
-    mVulkan.addPipeline(pipelineCI2);
+  mVulkan.addPipeline(pipelineCI);
+  mVulkan.addPipeline(pipelineCI2);
 
   //===== Loop
   vo::window::loop(

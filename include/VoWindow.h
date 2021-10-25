@@ -23,6 +23,8 @@ VkSurfaceKHR createSurface(VkInstance instance);
 VkExtent2D                getFramebufferSize();
 std::vector<char const *> getRequiredInstanceExtensions();
 
+void setCallbackKeyboard(GLFWkeyfun keyboardCallback);
+
 //-----------------------------------------------
 
 static inline GLFWwindow *handle  = nullptr;

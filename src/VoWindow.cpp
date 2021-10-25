@@ -22,15 +22,21 @@ void init(int32_t w_, int32_t h_, char const *title_)
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);     // Resize windows takes special care
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
 
-  handle = glfwCreateWindow(w, h, title.c_str(), nullptr, nullptr);
+  handle = glfwCreateWindow(w, h, (title + " : Vulkan Engine").c_str(), nullptr, nullptr);
   if (!handle) { vo__abort("Unable to create a window using GLFW"); }
 
-  // . Callbacks setup
-
-  // .. On FrameBuffer Resized
+  // . Default Callbacks
+  // On FrameBuffer Resized
   glfwSetFramebufferSizeCallback(handle, [](MBU GLFWwindow *window, MBU int w, MBU int h) {
     framebufferResized = true;
   });
+}
+
+//-----------------------------------------------
+
+void setCallbackKeyboard(GLFWkeyfun keyboardCallback)
+{
+  if (keyboardCallback) { glfwSetKeyCallback(handle, keyboardCallback); }
 }
 
 //-----------------------------------------------

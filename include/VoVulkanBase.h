@@ -18,7 +18,9 @@ public:
   void waitDevice();
   void addPipeline(PipelineCreateInfo_t const &ci);
 
-  inline auto currentFormat() { return mSwapChain.settings.surfaceFormat.format; }
+  inline auto currentFormat() const { return mSwapChain.settings.surfaceFormat.format; }
+
+  inline void iterScenes() { mActivePipeline = (mActivePipeline + 1) % mPipelines.size(); }
 
 private:
   void swapchainCreate();
