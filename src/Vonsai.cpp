@@ -57,8 +57,6 @@ void Vonsai::run()
     .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
   } };
 
-  // auto const extent2D = vo::window::getFramebufferSize();
-
   vku::PipelineCreateInfo_t const pipelineCI {
     // . Static
     .fixedFuncs         = vku::creators::fixedFuncs(),
@@ -79,10 +77,15 @@ void Vonsai::run()
       .offset = { 0, 0 },
       .extent = { UINT32_MAX, UINT32_MAX },
     } },
-    .commandBuffersData = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 6, 1, 0, 0); } } },
+    .commandBuffersData = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 3, 1, 0, 0); } } },
   };
 
-  mVulkan.addPipeline(pipelineCI);
+  vku::PipelineCreateInfo_t pipelineCI2 = pipelineCI;
+  pipelineCI2.shadersData = { { "base2", VK_SHADER_STAGE_VERTEX_BIT }, { "base", VK_SHADER_STAGE_FRAGMENT_BIT } },
+  pipelineCI2.commandBuffersData = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 6, 1, 0, 0); } } },
+
+  // mVulkan.addPipeline(pipelineCI);
+    mVulkan.addPipeline(pipelineCI2);
 
   //===== Loop
   vo::window::loop(

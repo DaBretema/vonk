@@ -2,7 +2,7 @@
 
 layout(location = 0) out vec3 fragColor;
 
-#define SHAPE 1
+#define SHAPE 2
 #define COLOR 1
 
 // . Colors
