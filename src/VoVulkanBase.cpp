@@ -1,5 +1,5 @@
 #include "VoVulkanBase.h"
-// #include "VoVulkanCreators.h"
+#include "VoVulkanCreators.h"
 #include "VoVulkanUtils.h"
 #include "VoWindow.h"
 
@@ -37,6 +37,15 @@ Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
 };
 
 //----------------------------------------------- !!
+
+void Base::addPipeline(PipelineCreateInfo_t const &ci)
+{
+  mPipelinesCI.push_back(ci);
+
+  mPipelines.push_back(vku::creators::pipeline(mPipelinesCI.back(), mSwapChain, mDevice.handle, mDevice.commandPool));
+};
+
+//-----------------------------------------------
 
 void Base::waitDevice() { vkDeviceWaitIdle(mDevice.handle); }
 
@@ -92,7 +101,7 @@ void Base::drawFrame()
     .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
     .pWaitDstStageMask    = waitStages,
     .commandBufferCount   = 1,
-    .pCommandBuffers      = &mScenes[activeScene].commandBuffers[imageIndex],
+    .pCommandBuffers      = &mPipelines[mActivePipeline].commandBuffers[imageIndex],
     .waitSemaphoreCount   = 1,
     .pWaitSemaphores      = waitSemaphores,
     .signalSemaphoreCount = 1,
@@ -285,19 +294,12 @@ void Base::cleanup()
   //=====
   //=====   USER DEFINED
 
-  for (auto &scene : mScenes) {
-    for (auto framebuffer : scene.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
+  for (auto &pipeline : mPipelines) {
+    vkDestroyPipeline(mDevice.handle, pipeline.handle, nullptr);
+    vkDestroyPipelineLayout(mDevice.handle, pipeline.layout, nullptr);
+    vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);  // after: mPipelineLayout
 
-    auto &cb = scene.commandBuffers;
-    if (cb.size() > 0) {
-      vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__getSize(cb), vku__getData(cb));
-    }
-
-    vkDestroyPipeline(mDevice.handle, scene.handle, nullptr);
-    vkDestroyPipelineLayout(mDevice.handle, scene.layout, nullptr);
-    vkDestroyRenderPass(mDevice.handle, scene.renderpass, nullptr);  // after: mPipelineLayout
-
-    for (auto [name, shaderModule] : scene.shaderModules) {
+    for (auto [name, shaderModule] : pipeline.shaderModules) {
       vkDestroyShaderModule(mDevice.handle, shaderModule, nullptr);
     }
   }
@@ -410,6 +412,15 @@ void Base::swapchainCleanUp()
   //   vkDestroyRenderPass(mDevice.handle, scene.renderpass, nullptr);  // after: mPipelineLayout
   // }
 
+  for (auto &pipeline : mPipelines) {
+    auto &cb = pipeline.commandBuffers;
+    if (cb.size() > 0) {
+      vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__getSize(cb), vku__getData(cb));
+    }
+
+    for (auto framebuffer : pipeline.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
+  }
+
   for (auto imageView : mSwapChain.views) { vkDestroyImageView(mDevice.handle, imageView, nullptr); }
 
   // NOTE: Do not destroy here the swap-chain in order to use it as .swapchainOld parameter and have a better exchange
@@ -423,10 +434,16 @@ void Base::swapchainReCreate()
   vkDeviceWaitIdle(mDevice.handle);
   swapchainCleanUp();
   swapchainCreate();
-  // graphicspipelineCreateHARDCODED();
-  // for (auto &scene : mScenes) {
-  //   // mGraphicsPipeline.recreate();
-  // }
+  for (size_t i = 0; i < mPipelines.size(); ++i) {
+    // auto &ci = mPipelinesCI[i];
+    vku::creators::pipelineRecreation(
+      mPipelines[i],
+      true,
+      mPipelinesCI[i],
+      mSwapChain,
+      mDevice.handle,
+      mDevice.commandPool);
+  }
 }
 
 //-----------------------------------------------

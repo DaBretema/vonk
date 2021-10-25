@@ -113,10 +113,10 @@ struct RenderPassData_t
 
 struct FixedFuncs_t
 {
-  // . ViewportState
-  std::vector<VkViewport>           viewports;
-  std::vector<VkRect2D>             scissors;
-  VkPipelineViewportStateCreateInfo viewportStateCI;
+  // . ViewportState : MOVED TO DYNAMIC
+  // std::vector<VkViewport>           viewports;
+  // std::vector<VkRect2D>             scissors;
+  // VkPipelineViewportStateCreateInfo viewportStateCI;
   // . Rasterization
   VkPipelineRasterizationStateCreateInfo rasterizationStateCI;
   // . Multisampling : Default OFF
@@ -127,6 +127,21 @@ struct FixedFuncs_t
   std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
   VkPipelineColorBlendStateCreateInfo              blendingCI;
 };
+
+//-----------------------------------------------
+
+struct CommandBufferData_t
+{
+  VkClearColorValue                    clearColor        = { { 0.0175f, 0.0f, 0.0175f, 1.0f } };
+  VkClearDepthStencilValue             clearDephtStencil = { 1.f, 0 };
+  MBU uint32_t                         renderPassIdx     = 0u;
+  std::function<void(VkCommandBuffer)> commands          = nullptr;
+};
+using CommandBuffersData_t = std::vector<CommandBufferData_t>;
+
+//-----------------------------------------------
+
+using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>;
 
 //-----------------------------------------------
 
@@ -158,44 +173,31 @@ struct PipelineLayoutData_t
   };
 };
 
-//-----------------------------------------------
-
-struct CommandBufferData_t
-{
-  VkClearColorValue                    clearColor        = { { 0.0175f, 0.0f, 0.0175f, 1.0f } };
-  VkClearDepthStencilValue             clearDephtStencil = { 1.f, 0 };
-  MBU uint32_t                         renderPassIdx     = 0u;
-  std::function<void(VkCommandBuffer)> commands          = nullptr;
-};
-using CommandBuffersData_t = std::vector<CommandBufferData_t>;
-
-//-----------------------------------------------
-
-using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>;
-
-//-----------------------------------------------
-
 struct PipelineCreateInfo_t
 {
+  // . Static
   FixedFuncs_t         fixedFuncs;
+  ShadersData_t        shadersData;
   RenderPassData_t     renderPassData;
   PipelineLayoutData_t pipelineLayoutData;
-  ShadersData_t        shadersData;
-  CommandBuffersData_t commandBuffersData;
+  // . Dynamic
+  std::vector<VkViewport> viewports;
+  std::vector<VkRect2D>   scissors;
+  CommandBuffersData_t    commandBuffersData;
 };
 
 struct Pipeline_t
 {
-  PipelineCreateInfo_t                            _CreateInfo;
-  VkPipeline                                      handle;
-  VkRenderPass                                    renderpass;
-  std::vector<VkFramebuffer>                      frameBuffers;
+  VkPipeline handle;
+  // . Static
   VkPipelineLayout                                layout;
   std::vector<VkPipelineShaderStageCreateInfo>    stagesCI;
+  VkRenderPass                                    renderpass;
   std::unordered_map<std::string, VkShaderModule> shaderModules;
-  std::vector<VkCommandBuffer>                    commandBuffers;
+  // . Dynamic
+  std::vector<VkFramebuffer>   frameBuffers;
+  std::vector<VkCommandBuffer> commandBuffers;
 };
-using Scenes_t = std::vector<Pipeline_t>;
 
 //-----------------------------------------------
 
