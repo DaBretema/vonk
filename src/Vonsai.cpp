@@ -41,32 +41,59 @@ void Vonsai::run()
 
   vku::RenderPassData_t rpd;
   rpd.attachments    = { {
-    .format         = mVulkan.currentFormat(),  // @DANI : ATENTION!!!
-    .samples        = VK_SAMPLE_COUNT_1_BIT,    // VK_SAMPLE_COUNT_1_BIT for No-Multisampling
-    .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-    .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-    .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-    .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-    .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-  } };
+                        .format         = mVulkan.currentFormat(),
+                        .samples        = VK_SAMPLE_COUNT_1_BIT,  // VK_SAMPLE_COUNT_1_BIT for No-Multisampling
+                        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+                        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+                        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                      },
+                      {
+                        .format         = mVulkan.currentFormat(),
+                        .samples        = VK_SAMPLE_COUNT_1_BIT,  // VK_SAMPLE_COUNT_1_BIT for No-Multisampling
+                        .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                        .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+                        .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                        .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+                        .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                      } };
   rpd.attachmentRefs = { {
-    .attachment = 0,
-    .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-  } };
+                           .attachment = 0,
+                           .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                         },
+                         {
+                           .attachment = 1,
+                           .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                         } };
   rpd.subpassDescs   = { {
-    .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
-    .colorAttachmentCount = vku__castSize(1),        // we don't want all of them in every subpass
-    .pColorAttachments    = &rpd.attachmentRefs[0],  // we don't want all of them in every subpass
-  } };
+                         .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                         .colorAttachmentCount = 1,  // we don't want all of them in every subpass
+                         .pColorAttachments    = &rpd.attachmentRefs[0],  // we don't want all of them in every subpass
+                       },
+                       {
+                         .pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                         .colorAttachmentCount = 1,  // we don't want all of them in every subpass
+                         .pColorAttachments    = &rpd.attachmentRefs[1],  // we don't want all of them in every subpass
+                       } };
   rpd.subpassDeps    = { {
-    .srcSubpass    = VK_SUBPASS_EXTERNAL,
-    .dstSubpass    = 0,
-    .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .srcAccessMask = 0,
-    .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-  } };
+                        .srcSubpass    = VK_SUBPASS_EXTERNAL,
+                        .dstSubpass    = 0,
+                        .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .srcAccessMask = 0,
+                        .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      },
+                      {
+                        .srcSubpass    = 0,
+                        .dstSubpass    = 1,
+                        .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .srcAccessMask = VK_ACCESS_NONE_KHR,
+                        .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                      } };
 
   vku::PipelineCreateInfo_t const pipelineCI {
     // . Static
@@ -107,8 +134,6 @@ void Vonsai::run()
 
   //===== Clean up
   mVulkan.cleanup();
-  // mDevice.destroy();
-  // mInstance.destroy();
 
   //=====
 }
