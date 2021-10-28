@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <string_view>
 
-namespace vo::vulkan
+namespace vonk
 {
 inline static std::unordered_map<uint32_t, std::string_view> const ToStr_DebugSeverity {
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT, "Verbose" },
@@ -325,6 +325,4 @@ inline static std::unordered_map<uint32_t, std::string_view> const ToStr_Format 
   { VK_FORMAT_MAX_ENUM, "VK_FORMAT_MAX_ENUM" },
 };
 
-}  // namespace vo::vulkan
-
-namespace vku = vo::vulkan;
+}  // namespace vonk

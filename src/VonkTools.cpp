@@ -1,9 +1,9 @@
-#include "VoVulkanUtils.h"
-#include "VoVulkanToStr.h"
+#include "VonkTools.h"
+#include "VonkToStr.h"
 
 #include "Utils.h"
 
-namespace vo::vulkan
+namespace vonk
 {  //
 
 //
@@ -18,7 +18,7 @@ namespace others
 
   std::vector<char const *> getInstanceExtensions()
   {
-    auto exts = vo::window::getRequiredInstanceExtensions();
+    auto exts = vonk::window::getRequiredInstanceExtensions();
 
     if (vo::sHasValidationLayers) { exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
 
@@ -85,8 +85,8 @@ namespace debugmessenger
       fmt::print(
         "\n ❗️ [VALIDATION LAYERS] - {} at {}{}"
         "\n--------------------------------------------------------------------------------\n{}\n",
-        vku::ToStr_DebugSeverity.at(messageSeverity),
-        vku::ToStr_DebugType.at(messageType),
+        vonk::ToStr_DebugSeverity.at(messageSeverity),
+        vonk::ToStr_DebugType.at(messageType),
         pUserData ? fmt::format("- {}", pUserData) : std::string { "" },
         pCallbackData->pMessage);
 
@@ -119,7 +119,7 @@ namespace debugmessenger
     };
 
     if (!vo::sHasValidationLayers) return;
-    vku__instanceFn(instance, vkCreateDebugUtilsMessengerEXT, &debugmessengerCreateInfo, nullptr, &debugHandle);
+    vonk__instanceFn(instance, vkCreateDebugUtilsMessengerEXT, &debugmessengerCreateInfo, nullptr, &debugHandle);
   }
 
   //-----------------------------------------------
@@ -127,7 +127,7 @@ namespace debugmessenger
   void destroy(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle)
   {
     if (!vo::sHasValidationLayers) return;
-    vku__instanceFn(instance, vkDestroyDebugUtilsMessengerEXT, debugHandle, nullptr);
+    vonk__instanceFn(instance, vkDestroyDebugUtilsMessengerEXT, debugHandle, nullptr);
   }
 
   //-----------------------------------------------
@@ -260,6 +260,20 @@ namespace swapchain
       vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, ssurf.presentModes.data());
     }
 
+    // . Depth format
+    for (auto &format : { VK_FORMAT_D32_SFLOAT_S8_UINT,
+                          VK_FORMAT_D32_SFLOAT,
+                          VK_FORMAT_D24_UNORM_S8_UINT,
+                          VK_FORMAT_D16_UNORM_S8_UINT,
+                          VK_FORMAT_D16_UNORM }) {
+      VkFormatProperties formatProps;
+      vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProps);
+      // Format must support depth stencil attachment for optimal tiling
+      if (formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+        ssurf.depthFormat = format;
+      }
+    }
+
     return ssurf;
   }
 
@@ -280,7 +294,7 @@ namespace swapchain
     auto const ssurf = getSupportData(physicalDevice, surface);
 
     // . [capabilities] - Direct store
-    scs.capabilities = ssurf.caps;
+    // scs.capabilities = ssurf.caps;
 
     // . [capabilities] - Get max allowed image to get in queue
     scs.minImageCount = ssurf.caps.minImageCount + 1;
@@ -335,7 +349,7 @@ namespace swapchain
     // . [presentModes] - Get best
     // * VK_PRESENT_MODE_FIFO_KHR    : Guaranteed to be available : vsync + double-buffer
     // * VK_PRESENT_MODE_MAILBOX_KHR :
-    //    Render as fast as possible while still avoiding tearing : close to vsync + triple-buffer
+    //    Render as fast as possible while still avoiding tearing : *almost* vsync + triple-buffer
     //    NOTE: Do not use it on mobiles due to power-consumption !!
     scs.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // fallback
     if (!scs.vsync) {
@@ -345,27 +359,24 @@ namespace swapchain
     }
 
     // . [surfaceFormat] - Get best
+    bool isValidSurfaceFormat = false;
     for (const auto &available : ssurf.formats) {
-      bool const sameFormat     = available.format == rs.surfaceFormat.format;
-      bool const sameColorSpace = available.colorSpace == rs.surfaceFormat.colorSpace;
-      if (sameFormat and sameColorSpace) { scs.surfaceFormat = available; }
+      if (available.format == rs.colorFormat && available.colorSpace == rs.colorSpace) {
+        isValidSurfaceFormat = true;
+        break;
+      }
     }
+    if (isValidSurfaceFormat) {
+      scs.colorFormat = rs.colorFormat;
+      scs.colorSpace  = rs.colorSpace;
+    } else {
+      scs.colorFormat = ssurf.formats[0].format;
+      scs.colorSpace  = ssurf.formats[0].colorSpace;
+    }
+    scs.depthFormat = ssurf.depthFormat;
 
     return scs;
   }
-
-  // //---------------------------------------------
-
-  // void SwapShainSettings_t::dumpInfo() const
-  // {
-  //   vo__info("- SwapChainSettings -");
-  //   vo__infof("Image Count             : {}", minImageCount);
-  //   vo__infof("Selected Extent 2D      : ({},{})", extent2D.width, extent2D.height);
-  //   vo__infof("Selected Present Mode   : {}", vku::ToStr_PresentMode.at(presentMode));
-  //   vo__infof("Selected Surface Format : {}", vku::ToStr_Format.at(surfaceFormat.format));
-  // }
-
-  //---------------------------------------------
 
 }  // namespace swapchain
 
@@ -408,12 +419,12 @@ namespace shaders
 
     VkShaderModuleCreateInfo const shadermoduleCI {
       .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = vku__getSize(code),
+      .codeSize = vonk__getSize(code),
       .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
     };
 
     VkShaderModule shadermodule;
-    vku__check(vkCreateShaderModule(logicalDevice, &shadermoduleCI, nullptr, &shadermodule));
+    vonk__check(vkCreateShaderModule(logicalDevice, &shadermoduleCI, nullptr, &shadermodule));
 
     VkPipelineShaderStageCreateInfo shaderStageCI {
       .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -453,4 +464,4 @@ namespace shaders
 // ---  ---
 //=============================================================================
 
-}  // namespace vo::vulkan
+}  // namespace vonk

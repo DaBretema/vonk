@@ -1,15 +1,16 @@
 #pragma once
 
 #include "_vulkan.h"
+#include "VonkWindow.h"
+#include "VonkTypes.h"
+
 #include "Macros.h"
-#include "VoWindow.h"
-#include "VoVulkanTypes.h"
 
 #include <set>
 #include <vector>
 #include <optional>
 
-namespace vo::vulkan
+namespace vonk
 {  //
 
 //
@@ -99,6 +100,7 @@ namespace swapchain
     VkSurfaceCapabilitiesKHR        caps;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR>   presentModes;
+    VkFormat                        depthFormat;
   };
 
   bool                isEmpty(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
@@ -134,6 +136,4 @@ namespace shaders
 // --- ---
 //=============================================================================
 
-}  // namespace vo::vulkan
-
-namespace vku = vo::vulkan;
+}  // namespace vonk

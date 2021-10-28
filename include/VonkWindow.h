@@ -8,7 +8,7 @@
 #include <string>
 #include <functional>
 
-namespace vo::window
+namespace vonk::window
 {  //
 
 //-----------------------------------------------
@@ -42,4 +42,4 @@ static auto const setUserPointer = [](auto *ptr) { userPtr = reinterpret_cast<vo
 
 //-----------------------------------------------
 
-}  // namespace vo::window
+}  // namespace vonk::window

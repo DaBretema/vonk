@@ -3,22 +3,25 @@
 #include "_vulkan.h"
 #include <vector>
 #include <unordered_map>
-#include <VoVulkanTypes.h>
-#include <VoVulkanUtils.h>
 
-namespace vo::vulkan
+#include "VonkTypes.h"
+#include "VonkTools.h"
+
+namespace vonk
 {  //
 
 class Base
 {
 public:
+  Base() = default;
+
   void init();
   void cleanup();
   void drawFrame();
   void waitDevice();
   void addPipeline(PipelineCreateInfo_t const &ci);
 
-  inline auto currentFormat() const { return mSwapChain.settings.surfaceFormat.format; }
+  inline auto currentFormat() const { return mSwapChain.settings.colorFormat; }
 
   inline void iterScenes() { mActivePipeline = (mActivePipeline + 1) % mPipelines.size(); }
 
@@ -35,9 +38,12 @@ private:
   SwapChain_t mSwapChain;
   SyncBase_t  mSync;
 
+  VkRenderPass               mDefaultRenderPass;
+  std::vector<VkFramebuffer> mDefaultFrameBuffers;
+
   std::vector<Pipeline_t>           mPipelines;
   std::vector<PipelineCreateInfo_t> mPipelinesCI;
   uint32_t                          mActivePipeline = 0u;
 
 };  // class Base
-}  // namespace vo::vulkan
+}  // namespace vonk

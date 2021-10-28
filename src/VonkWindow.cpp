@@ -1,8 +1,8 @@
-#include "VoWindow.h"
+#include "VonkWindow.h"
 
 #include "Macros.h"
 
-namespace vo::window
+namespace vonk::window
 {  //
 
 // //-----------------------------------------------
@@ -28,6 +28,8 @@ void init(int32_t w_, int32_t h_, char const *title_)
   // . Default Callbacks
   // On FrameBuffer Resized
   glfwSetFramebufferSizeCallback(handle, [](MBU GLFWwindow *window, MBU int w, MBU int h) {
+    vonk::window::w    = w;
+    vonk::window::h    = h;
     framebufferResized = true;
   });
 }
@@ -55,9 +57,9 @@ void loop(std::function<void(void)> perFrame, std::function<void(void)> onClose,
 
     // ::: Handle window minimization
     if (polling) {
-      auto size = vo::window::getFramebufferSize();
+      auto size = vonk::window::getFramebufferSize();
       while (size.width == 0 || size.height == 0) {
-        size = vo::window::getFramebufferSize();
+        size = vonk::window::getFramebufferSize();
         glfwWaitEvents();
       }
     }
@@ -74,7 +76,7 @@ void loop(std::function<void(void)> perFrame, std::function<void(void)> onClose,
 VkSurfaceKHR createSurface(VkInstance instance)
 {
   VkSurfaceKHR surface;
-  vku__check(glfwCreateWindowSurface(instance, handle, nullptr, &surface));
+  vonk__check(glfwCreateWindowSurface(instance, handle, nullptr, &surface));
   return surface;
 }
 
@@ -98,4 +100,4 @@ std::vector<char const *> getRequiredInstanceExtensions()
 
 //-----------------------------------------------
 
-}  // namespace vo::window
+}  // namespace vonk::window

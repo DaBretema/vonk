@@ -8,8 +8,8 @@
 namespace vo
 {  //
 
-// ::: Mark argunment as unused to avoid warnings
 #define MBU [[maybe_unused]]
+
 static inline auto const PtrStr = [](auto *p) { return fmt::format("{}", fmt::ptr(p)); };
 
 //.
@@ -62,20 +62,20 @@ static inline auto const VO_TRACE = [](int lvl, auto msg) {
 //.
 //.
 
-// === VULKAN MACROS = vku__
+// === VULKAN MACROS = vonk__
 //-----------------------------------------------------------------------------
 
 // ::: Validate api calls
-#define vku__check(vulkanCode) \
+#define vonk__check(vulkanCode) \
   if (VkResult res = vulkanCode; res != VK_SUCCESS) { vo__abortf("{} : {}", res, #vulkanCode); }
 
 // ::: Cast shortcut
-#define vku__castSize(v) static_cast<uint32_t>(v)
-#define vku__getSize(v)  vku__castSize(v.size())
-#define vku__getData(v)  v.data()
+#define vonk__castSize(v) static_cast<uint32_t>(v)
+#define vonk__getSize(v)  vonk__castSize(v.size())
+#define vonk__getData(v)  v.data()
 
 // ::: Get instance functions
-#define vku__instanceFn(instance, extName, ...)                                   \
+#define vonk__instanceFn(instance, extName, ...)                                  \
   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
     fn(instance, __VA_ARGS__);                                                    \
   } else {                                                                        \

@@ -1,14 +1,14 @@
-#include "VoVulkanBase.h"
-#include "VoVulkanCreators.h"
-#include "VoVulkanUtils.h"
-#include "VoWindow.h"
+#include "VonkBase.h"
+#include "VonkCreate.h"
+#include "VonkTools.h"
+#include "VonkWindow.h"
 
-namespace vo::vulkan
+namespace vonk
 {  //
 
 //-----------------------------------------------
 
-// @DANI move this to 'VoVulkanUtils' also rename it to 'VoVulkanTools'
+// @DANI move this to 'VonkUtils' also rename it to 'VonkTools'
 Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
 {
   Gpu_t gpu;
@@ -17,14 +17,14 @@ Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
   vkGetPhysicalDeviceProperties(pd, &gpu.properties);
   vkGetPhysicalDeviceMemoryProperties(pd, &gpu.memory);
 
-  auto const queueIndicesOpt        = vku::queue::findIndices(pd, surface);
-  bool const queueIndicesIsComplete = vku::queue::isComplete(queueIndicesOpt);
-  if (queueIndicesIsComplete) { gpu.queuesIndices = vku::queue::unrollOptionals(queueIndicesOpt); }
+  auto const queueIndicesOpt        = vonk::queue::findIndices(pd, surface);
+  bool const queueIndicesIsComplete = vonk::queue::isComplete(queueIndicesOpt);
+  if (queueIndicesIsComplete) { gpu.queuesIndices = vonk::queue::unrollOptionals(queueIndicesOpt); }
 
   if (
-    !queueIndicesIsComplete                                                   //
-    or vku::swapchain::isEmpty(pd, surface)                                   //
-    or !vku::others::checkDeviceExtensionsSupport(pd, vo::sDeviceExtensions)  //
+    !queueIndicesIsComplete                                                    //
+    or vonk::swapchain::isEmpty(pd, surface)                                   //
+    or !vonk::others::checkDeviceExtensionsSupport(pd, vo::sDeviceExtensions)  //
     // or !gpu.features.geometryShader                                           //
   ) {
     return gpu;
@@ -41,8 +41,7 @@ Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
 void Base::addPipeline(PipelineCreateInfo_t const &ci)
 {
   mPipelinesCI.push_back(ci);
-
-  mPipelines.push_back(vku::creators::pipeline(mPipelinesCI.back(), mSwapChain, mDevice.handle, mDevice.commandPool));
+  mPipelines.push_back(vonk::create::pipeline(mPipelinesCI.back(), mSwapChain, mDevice.handle, mDevice.commandPool));
 };
 
 //-----------------------------------------------
@@ -110,7 +109,7 @@ void Base::drawFrame()
 
   // (2.3) Reset fences right before asking for draw
   vkResetFences(mDevice.handle, 1, &mSync.fences.submit[currFrame]);
-  vku__check(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSync.fences.submit[currFrame]));
+  vonk__check(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSync.fences.submit[currFrame]));
 
   //=====
   //=====   3. DUMP TO SCREEN : Present Queue
@@ -131,8 +130,8 @@ void Base::drawFrame()
   auto const presentRet = vkQueuePresentKHR(mDevice.queues.present, &presentInfo);
 
   // (3.3) Validate swapchain state
-  if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vo::window::framebufferResized) {
-    vo::window::framebufferResized = false;
+  if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vonk::window::framebufferResized) {
+    vonk::window::framebufferResized = false;  // move this variable to vonk::Base
     swapchainReCreate();
   } else if (presentRet != VK_SUCCESS) {
     vo__err("Failed to present swap chain image!");
@@ -151,46 +150,27 @@ void Base::init()
   //=====
   //=====   SETTINGS
 
-  if (!vku::others::checkValidationLayersSupport(vo::sValidationLayers)) {
+  if (!vonk::others::checkValidationLayersSupport(vo::sValidationLayers)) {
     vo__abort("Validation layers requested, but not available!");
   }
 
   //=====
   //=====   CREATE INSTANCE
-
-  auto const instanceExtensions = vku::others::getInstanceExtensions();
-
-  VkApplicationInfo const appInfo {
-    .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-    .pApplicationName   = vo::window::title.c_str(),
-    .pEngineName        = vo::window::title.c_str(),
-    .applicationVersion = VK_API_VERSION_1_2,
-    .engineVersion      = VK_API_VERSION_1_2,
-    .apiVersion         = VK_API_VERSION_1_2,
-  };
-
-  VkInstanceCreateInfo const instanceCI {
-    .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-    .pApplicationInfo = &appInfo,
-    // Esential extensions
-    .enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size()),
-    .ppEnabledExtensionNames = instanceExtensions.data(),
-    // Layers
-    .enabledLayerCount   = static_cast<uint32_t>(vo::sValidationLayers.size()),
-    .ppEnabledLayerNames = vo::sValidationLayers.data(),
-  };
-  // auto const instanceCI = vku::init::instance(vo::window::title.c_str(), instanceExtensions, vo::sValidationLayers);
-  vku__check(vkCreateInstance(&instanceCI, nullptr, &mInstance.handle));
+  mInstance.handle = vonk::create::instance(
+    vonk::window::title.c_str(),
+    vonk::others::getInstanceExtensions(),
+    vo::sValidationLayers,
+    VK_API_VERSION_1_2);
 
   //=====
   //=====   CREATE DEBUG MESSENGER
 
-  vku::debugmessenger::create(mInstance.handle, mInstance.debugger);
+  vonk::debugmessenger::create(mInstance.handle, mInstance.debugger);
 
   //=====
   //=====   CREATE SURFACE  (@DANI: Check for headless Vulkan in a future)
 
-  mInstance.surface = vo::window::createSurface(mInstance.handle);
+  mInstance.surface = vonk::window::createSurface(mInstance.handle);
 
   //=====
   //=====   PICK GPU (PHYSICAL DEVICE)
@@ -211,13 +191,21 @@ void Base::init()
   if (maxScore < 1) { vo__abort("Suitable GPU not found!"); }
 
   //=====
+  //=====   CAPTURE DATA : Related with GPU and SURFACE
+
+  mSwapChain.settings = vonk::swapchain::getSettings(
+    mGpu.handle,
+    mInstance.surface,
+    SwapShainSettings_t { true, vonk::window::getFramebufferSize() });
+
+  //=====
   //=====   CREATE DEVICE  (GPU MANAGER / LOGICAL DEVICE)
 
   // . Queues' Create Infos
   // NOTE: If graphics, compute or present queues comes from the same family register it only once
   float const                          queuePriority = 1.0f;
   std::vector<VkDeviceQueueCreateInfo> queueCIs;
-  for (uint32_t queueFamily : vku::queue::getUniqueIndices(mGpu.queuesIndices)) {
+  for (uint32_t queueFamily : vonk::queue::getUniqueIndices(mGpu.queuesIndices)) {
     queueCIs.push_back(VkDeviceQueueCreateInfo {
       .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
       .queueFamilyIndex = queueFamily,
@@ -225,27 +213,25 @@ void Base::init()
       .pQueuePriorities = &queuePriority,
     });
   }
-
   // . Device's Create Info
   VkDeviceCreateInfo const deviceCI {
     .sType            = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     .pEnabledFeatures = &mGpu.features,
     // Queues info
-    .queueCreateInfoCount = vku__getSize(queueCIs),
-    .pQueueCreateInfos    = vku__getData(queueCIs),
+    .queueCreateInfoCount = vonk__getSize(queueCIs),
+    .pQueueCreateInfos    = vonk__getData(queueCIs),
     // Set device extensions
-    .enabledExtensionCount   = vku__getSize(vo::sDeviceExtensions),
-    .ppEnabledExtensionNames = vku__getData(vo::sDeviceExtensions),
+    .enabledExtensionCount   = vonk__getSize(vo::sDeviceExtensions),
+    .ppEnabledExtensionNames = vonk__getData(vo::sDeviceExtensions),
     // Set device validation layers
-    .enabledLayerCount   = vku__getSize(vo::sValidationLayers),
-    .ppEnabledLayerNames = vku__getData(vo::sValidationLayers),
+    .enabledLayerCount   = vonk__getSize(vo::sValidationLayers),
+    .ppEnabledLayerNames = vonk__getData(vo::sValidationLayers),
   };
-
   // . Create Device !
-  vku__check(vkCreateDevice(mGpu.handle, &deviceCI, nullptr, &mDevice.handle));
+  vonk__check(vkCreateDevice(mGpu.handle, &deviceCI, nullptr, &mDevice.handle));
 
   // . Pick required queues
-  mDevice.queues        = vku::queue::findQueues(mDevice.handle, mGpu.queuesIndices);
+  mDevice.queues        = vonk::queue::findQueues(mDevice.handle, mGpu.queuesIndices);
   mDevice.queuesIndices = mGpu.queuesIndices;
 
   //=====
@@ -256,7 +242,7 @@ void Base::init()
     .queueFamilyIndex = mDevice.queuesIndices.graphics,
     .flags            = 0,  // Optional
   };
-  vku__check(vkCreateCommandPool(mDevice.handle, &commandPoolCI, nullptr, &mDevice.commandPool));
+  vonk__check(vkCreateCommandPool(mDevice.handle, &commandPoolCI, nullptr, &mDevice.commandPool));
 
   //=====
   //=====   SYNC OBJECTS  :  Maybe this is SwapChain resposibility...
@@ -275,17 +261,93 @@ void Base::init()
   };
 
   for (size_t i = 0; i < sInFlightMaxFrames; ++i) {
-    vku__check(vkCreateSemaphore(mDevice.handle, &semaphoreCI, nullptr, &mSync.semaphores.render[i]));
-    vku__check(vkCreateSemaphore(mDevice.handle, &semaphoreCI, nullptr, &mSync.semaphores.present[i]));
-    vku__check(vkCreateFence(mDevice.handle, &fenceCI, nullptr, &mSync.fences.submit[i]));
+    vonk__check(vkCreateSemaphore(mDevice.handle, &semaphoreCI, nullptr, &mSync.semaphores.render[i]));
+    vonk__check(vkCreateSemaphore(mDevice.handle, &semaphoreCI, nullptr, &mSync.semaphores.present[i]));
+    vonk__check(vkCreateFence(mDevice.handle, &fenceCI, nullptr, &mSync.fences.submit[i]));
   }
+
+  //=====
+  //=====   DEFAULT RENDERPASS
+
+  RenderPassData_t rpd;
+  rpd.attachments = {
+    {
+      .format         = mSwapChain.settings.colorFormat,
+      .samples        = VK_SAMPLE_COUNT_1_BIT,
+      .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+      .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    },
+    {
+      .format         = mSwapChain.settings.depthFormat,
+      .samples        = VK_SAMPLE_COUNT_1_BIT,
+      .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+      .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    },
+  };
+  rpd.attachmentRefs = {
+    {
+      // color
+      .attachment = 0,
+      .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    },
+    {
+      // depth
+      .attachment = 1,
+      .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    },
+  };
+  rpd.subpassDescs = {
+    {
+      .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+      .colorAttachmentCount    = 1,
+      .pColorAttachments       = &rpd.attachmentRefs[0],
+      .pDepthStencilAttachment = &rpd.attachmentRefs[1],
+      .inputAttachmentCount    = 0,
+      .pInputAttachments       = nullptr,
+      .preserveAttachmentCount = 0,
+      .pPreserveAttachments    = nullptr,
+      .pResolveAttachments     = nullptr,
+    },
+  };
+  rpd.subpassDeps = {
+    // 0
+    {
+      .srcSubpass      = VK_SUBPASS_EXTERNAL,
+      .dstSubpass      = 0,
+      .srcStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .srcAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
+      .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+
+    },
+    // 1
+    {
+      .srcSubpass      = 0,
+      .dstSubpass      = VK_SUBPASS_EXTERNAL,
+      .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
+      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+    },
+  };
+  mDefaultRenderPass = vonk::create::renderpass(mDevice.handle, rpd);
 
   //=====
   //=====   CREATE SWAPCHAIN  (DEFAULT "FBO")
 
   swapchainCreate();
 
-}  // void Base::init()
+}  // namespace vonk
 
 //-----------------------------------------------
 
@@ -305,6 +367,11 @@ void Base::cleanup()
   }
 
   //=====
+  //=====   DEFAULTS
+
+  vkDestroyRenderPass(mDevice.handle, mDefaultRenderPass, nullptr);
+
+  //=====
   //=====   DEVICE
 
   swapchainCleanUp();
@@ -320,7 +387,7 @@ void Base::cleanup()
   //=====
   //=====   INSTANCE
 
-  vku::debugmessenger::destroy(mInstance.handle, mInstance.debugger);
+  vonk::debugmessenger::destroy(mInstance.handle, mInstance.debugger);
   vkDestroySurfaceKHR(mInstance.handle, mInstance.surface, nullptr);
   vkDestroyInstance(mInstance.handle, nullptr);
 
@@ -332,15 +399,15 @@ void Base::cleanup()
 
 void Base::swapchainCreate()
 {
-  // . Get supported settings
-  mSwapChain.settings = vku::swapchain::getSettings(
-    mGpu.handle,
-    mInstance.surface,
-    SwapShainSettings_t { true, vo::window::getFramebufferSize() });
+  // // . Get supported settings
+  // mSwapChain.settings = vonk::swapchain::getSettings(
+  //   mGpu.handle,
+  //   mInstance.surface,
+  //   SwapShainSettings_t { true, vonk::window::getFramebufferSize() });
 
   // . Create SwapChain
-  bool const        gpDiffQueue = mDevice.queues.graphics != mDevice.queues.present;
-  std::vector const gpIndices   = { mDevice.queuesIndices.graphics, mDevice.queuesIndices.present };
+  static bool const        gpDiffQueue = mDevice.queues.graphics != mDevice.queues.present;
+  static std::vector const gpIndices   = { mDevice.queuesIndices.graphics, mDevice.queuesIndices.present };
 
   VkSwapchainCreateInfoKHR const swapchainCI {
     .sType   = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -354,17 +421,17 @@ void Base::swapchainCreate()
     .imageArrayLayers = 1,  // -> Always 1 unless you are developing a stereoscopic 3D application.
     .minImageCount    = mSwapChain.settings.minImageCount,
     .imageExtent      = mSwapChain.settings.extent2D,
-    .imageFormat      = mSwapChain.settings.surfaceFormat.format,
-    .imageColorSpace  = mSwapChain.settings.surfaceFormat.colorSpace,
+    .imageFormat      = mSwapChain.settings.colorFormat,
+    .imageColorSpace  = mSwapChain.settings.colorSpace,
     .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | mSwapChain.settings.extraImageUsageFlags,
 
     .imageSharingMode      = gpDiffQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = gpDiffQueue ? vku__getSize(gpIndices) : 0,
-    .pQueueFamilyIndices   = gpDiffQueue ? vku__getData(gpIndices) : nullptr,
+    .queueFamilyIndexCount = gpDiffQueue ? vonk__getSize(gpIndices) : 0,
+    .pQueueFamilyIndices   = gpDiffQueue ? vonk__getData(gpIndices) : nullptr,
 
     .oldSwapchain = mSwapChain.handle  // -> Better cleanup + ensure that we can still present already acquired images
   };
-  vku__check(vkCreateSwapchainKHR(mDevice.handle, &swapchainCI, nullptr, &mSwapChain.handle));
+  vonk__check(vkCreateSwapchainKHR(mDevice.handle, &swapchainCI, nullptr, &mSwapChain.handle));
 
   // . Get SwapChain Images
   uint32_t imageCount;
@@ -381,7 +448,7 @@ void Base::swapchainCreate()
       .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .image    = mSwapChain.images[i],
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format   = mSwapChain.settings.surfaceFormat.format,
+      .format   = mSwapChain.settings.colorFormat,
       // * How to read RGBA
       .components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A },
       // * The subresourceRange field describes what the image's purpose is and which part to be accessed.
@@ -391,8 +458,31 @@ void Base::swapchainCreate()
       .subresourceRange.baseArrayLayer = 0,
       .subresourceRange.layerCount     = 1,
     };
-    vku__check(vkCreateImageView(mDevice.handle, &imageViewCI, nullptr, &mSwapChain.views[i]));
+    vonk__check(vkCreateImageView(mDevice.handle, &imageViewCI, nullptr, &mSwapChain.views[i]));
   }
+
+  // // . Setup default framebuffers
+  // VkImageView attachments[1];
+
+  // // Depth/Stencil attachment is the same for all frame buffers
+  // attachments[1] = depthStencil.view;
+
+  // VkFramebufferCreateInfo frameBufferCreateInfo = {};
+  // frameBufferCreateInfo.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  // frameBufferCreateInfo.pNext                   = NULL;
+  // frameBufferCreateInfo.renderPass              = renderPass;
+  // frameBufferCreateInfo.attachmentCount         = 2;
+  // frameBufferCreateInfo.pAttachments            = attachments;
+  // frameBufferCreateInfo.width                   = width;
+  // frameBufferCreateInfo.height                  = height;
+  // frameBufferCreateInfo.layers                  = 1;
+
+  // // Create frame buffers for every swap chain image
+  // frameBuffers.resize(swapChain.imageCount);
+  // for (uint32_t i = 0; i < frameBuffers.size(); i++) {
+  //   attachments[0] = swapChain.buffers[i].view;
+  //   VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+  // }
 }
 
 //-----------------------------------------------
@@ -404,7 +494,7 @@ void Base::swapchainCleanUp()
 
   //   auto &cb = scene.commandBuffers;
   //   if (cb.size() > 0) {
-  //     vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__getSize(cb), vku__getData(cb));
+  //     vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vonk__getSize(cb), vonk__getData(cb));
   //   }
 
   //   vkDestroyPipeline(mDevice.handle, scene.handle, nullptr);
@@ -415,7 +505,7 @@ void Base::swapchainCleanUp()
   for (auto &pipeline : mPipelines) {
     auto &cb = pipeline.commandBuffers;
     if (cb.size() > 0) {
-      vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vku__getSize(cb), vku__getData(cb));
+      vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vonk__getSize(cb), vonk__getData(cb));
     }
 
     for (auto framebuffer : pipeline.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
@@ -436,7 +526,7 @@ void Base::swapchainReCreate()
   swapchainCreate();
   for (size_t i = 0; i < mPipelines.size(); ++i) {
     // auto &ci = mPipelinesCI[i];
-    vku::creators::pipelineRecreation(
+    vonk::create::pipelineRecreation(
       mPipelines[i],
       true,
       mPipelinesCI[i],
@@ -448,4 +538,4 @@ void Base::swapchainReCreate()
 
 //-----------------------------------------------
 
-}  // namespace vo::vulkan
+}  // namespace vonk

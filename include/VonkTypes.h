@@ -6,10 +6,10 @@
 #include <string>
 #include <unordered_map>
 
-namespace vo::vulkan
+namespace vonk
 {  //
 
-//=============================================================================
+//-----------------------------------------------
 
 struct QueueIndices_t
 {
@@ -29,18 +29,18 @@ struct SwapShainSettings_t
 {
   bool vsync = true;
 
-  VkExtent2D               extent2D      = { 1280, 720 };
-  VkPresentModeKHR         presentMode   = VK_PRESENT_MODE_FIFO_KHR;
-  uint32_t                 minImageCount = 0u;
-  VkSurfaceCapabilitiesKHR capabilities  = {};
-
-  VkSurfaceFormatKHR            surfaceFormat        = { VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR };
+  VkExtent2D                    extent2D             = { 1280, 720 };
+  VkPresentModeKHR              presentMode          = VK_PRESENT_MODE_FIFO_KHR;
+  uint32_t                      minImageCount        = 0u;
+  VkFormat                      depthFormat          = VK_FORMAT_UNDEFINED;
+  VkFormat                      colorFormat          = VK_FORMAT_B8G8R8A8_SRGB;
+  VkColorSpaceKHR               colorSpace           = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
   VkSurfaceTransformFlagBitsKHR preTransformFlag     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
   VkCompositeAlphaFlagBitsKHR   compositeAlphaFlag   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   VkImageUsageFlags             extraImageUsageFlags = {};
 };
 
-//=============================================================================
+//-----------------------------------------------
 
 struct Instance_t
 {
@@ -101,6 +101,17 @@ struct SyncBase_t
 
 //-----------------------------------------------
 
+struct FixedFuncs_t
+{
+  VkPipelineRasterizationStateCreateInfo           rasterizationStateCI;
+  VkPipelineMultisampleStateCreateInfo             multisamplingCI;
+  VkPipelineDepthStencilStateCreateInfo            depthstencilCI;
+  std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
+  VkPipelineColorBlendStateCreateInfo              blendingCI;
+};
+
+//-----------------------------------------------
+
 struct RenderPassData_t
 {
   std::vector<VkAttachmentDescription> attachments;
@@ -111,21 +122,20 @@ struct RenderPassData_t
 
 //-----------------------------------------------
 
-struct FixedFuncs_t
+struct Texture_t
 {
-  // . ViewportState : MOVED TO DYNAMIC
-  // std::vector<VkViewport>           viewports;
-  // std::vector<VkRect2D>             scissors;
-  // VkPipelineViewportStateCreateInfo viewportStateCI;
-  // . Rasterization
-  VkPipelineRasterizationStateCreateInfo rasterizationStateCI;
-  // . Multisampling : Default OFF
-  VkPipelineMultisampleStateCreateInfo multisamplingCI;
-  // . Depth / Stencil
-  VkPipelineDepthStencilStateCreateInfo depthstencilCI;
-  // . Blending
-  std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
-  VkPipelineColorBlendStateCreateInfo              blendingCI;
+  VkImageView    view;
+  VkImage        image;
+  VkDeviceMemory memory;
+};
+
+//-----------------------------------------------
+
+struct FrameBuffer_t
+{
+  VkFramebuffer          framebuffer;
+  std::vector<Texture_t> attachments;
+  // VkDescriptorImageInfo                descriptor;
 };
 
 //-----------------------------------------------
@@ -147,7 +157,7 @@ using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>
 
 struct PipelineLayoutData_t
 {
-  // . Used for: vku__check(vkCreatePipelineLayout(mDevice.handle, &pipelineLayoutCI, nullptr, &mPipeline.layout));
+  // . Used for: vonk__check(vkCreatePipelineLayout(mDevice.handle, &pipelineLayoutCI, nullptr, &mPipeline.layout));
   VkPipelineLayoutCreateInfo pipelineLayoutCI {
     .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
     .setLayoutCount         = 0,        // Optional
@@ -201,4 +211,4 @@ struct Pipeline_t
 
 //-----------------------------------------------
 
-}  // namespace vo::vulkan
+}  // namespace vonk
