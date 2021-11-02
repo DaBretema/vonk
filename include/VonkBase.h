@@ -38,6 +38,7 @@ private:
   SwapChain_t mSwapChain;
   SyncBase_t  mSync;
 
+  Texture_t                  mDefaultDepthTexture;
   VkRenderPass               mDefaultRenderPass;
   std::vector<VkFramebuffer> mDefaultFrameBuffers;
 

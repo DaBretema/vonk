@@ -8,9 +8,8 @@
 namespace vo
 {  //
 
-#define MBU [[maybe_unused]]
-
-static inline auto const PtrStr = [](auto *p) { return fmt::format("{}", fmt::ptr(p)); };
+#define MBU           [[maybe_unused]]
+#define vo__ptrstr(p) fmt::format("{}", fmt::ptr(p))
 
 //.
 //.
@@ -19,21 +18,21 @@ static inline auto const PtrStr = [](auto *p) { return fmt::format("{}", fmt::pt
 //
 // === VONSAI MACROS = vo__
 //-----------------------------------------------------------------------------
-static inline auto const VO_TRACE = [](int lvl, auto msg) {
-  std::string const beginLineJumps = lvl < 2 ? "\n\n" : lvl < 3 ? "\n" : "";
+// static inline auto const VO_TRACE = [](int lvl, auto msg) {
+//   std::string const beginLineJumps = lvl < 2 ? "\n\n" : lvl < 3 ? "\n" : "";
 
-  std::string const byLevelSep  = std::string(4 * (lvl - 1), ' ');
-  std::string const byLevelMark = lvl < 2 ? "### " : lvl < 3 ? ">> " : lvl < 4 ? "* " : "- ";
-  // std::string const byLevelMark = std::string(lvl, '>') + ' ';
+//   std::string const byLevelSep  = std::string(4 * (lvl - 1), ' ');
+//   std::string const byLevelMark = lvl < 2 ? "### " : lvl < 3 ? ">> " : lvl < 4 ? "* " : "- ";
+//   // std::string const byLevelMark = std::string(lvl, '>') + ' ';
 
-  size_t            textSize       = std::string(msg).size() + byLevelMark.size();
-  std::string const byLevelSubLine = lvl < 3 ? std::string(textSize, '-') + "\n" : "";
+//   size_t            textSize       = std::string(msg).size() + byLevelMark.size();
+//   std::string const byLevelSubLine = lvl < 3 ? std::string(textSize, '-') + "\n" : "";
 
-  std::string const message = byLevelSep + byLevelMark + msg;
-  std::string const subLine = "\n" + (lvl < 3 ? byLevelSep : "") + byLevelSubLine;
+//   std::string const message = byLevelSep + byLevelMark + msg;
+//   std::string const subLine = "\n" + (lvl < 3 ? byLevelSep : "") + byLevelSubLine;
 
-  fmt::print("{}{}{}", beginLineJumps, message, subLine);
-};
+//   fmt::print("{}{}{}", beginLineJumps, message, subLine);
+// };
 
 // "Raw" log macros
 #define vo__info(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)

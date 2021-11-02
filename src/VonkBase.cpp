@@ -41,7 +41,13 @@ Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
 void Base::addPipeline(PipelineCreateInfo_t const &ci)
 {
   mPipelinesCI.push_back(ci);
-  mPipelines.push_back(vonk::create::pipeline(mPipelinesCI.back(), mSwapChain, mDevice.handle, mDevice.commandPool));
+  mPipelines.push_back(vonk::create::pipeline(
+    mPipelinesCI.back(),
+    mSwapChain,
+    mDevice.handle,
+    mDevice.commandPool,
+    mDefaultRenderPass,
+    mDefaultFrameBuffers));
 };
 
 //-----------------------------------------------
@@ -346,8 +352,7 @@ void Base::init()
   //=====   CREATE SWAPCHAIN  (DEFAULT "FBO")
 
   swapchainCreate();
-
-}  // namespace vonk
+}
 
 //-----------------------------------------------
 
@@ -359,7 +364,7 @@ void Base::cleanup()
   for (auto &pipeline : mPipelines) {
     vkDestroyPipeline(mDevice.handle, pipeline.handle, nullptr);
     vkDestroyPipelineLayout(mDevice.handle, pipeline.layout, nullptr);
-    vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);  // after: mPipelineLayout
+    if (pipeline.renderpass != mDefaultRenderPass) vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);
 
     for (auto [name, shaderModule] : pipeline.shaderModules) {
       vkDestroyShaderModule(mDevice.handle, shaderModule, nullptr);
@@ -372,8 +377,7 @@ void Base::cleanup()
   vkDestroyRenderPass(mDevice.handle, mDefaultRenderPass, nullptr);
 
   //=====
-  //=====   DEVICE
-
+  //=====   SWAPCHAIN
   swapchainCleanUp();
   vkDestroySwapchainKHR(mDevice.handle, mSwapChain.handle, nullptr);
   for (size_t i = 0; i < sInFlightMaxFrames; i++) {
@@ -381,6 +385,9 @@ void Base::cleanup()
     vkDestroySemaphore(mDevice.handle, mSync.semaphores.present[i], nullptr);
     vkDestroyFence(mDevice.handle, mSync.fences.submit[i], nullptr);
   }
+
+  //=====
+  //=====   DEVICE
   vkDestroyCommandPool(mDevice.handle, mDevice.commandPool, nullptr);
   vkDestroyDevice(mDevice.handle, nullptr);
 
@@ -390,8 +397,7 @@ void Base::cleanup()
   vonk::debugmessenger::destroy(mInstance.handle, mInstance.debugger);
   vkDestroySurfaceKHR(mInstance.handle, mInstance.surface, nullptr);
   vkDestroyInstance(mInstance.handle, nullptr);
-
-}  // void Base::cleanup()
+}
 
 //-----------------------------------------------
 //-----------------------------------------------
@@ -461,47 +467,40 @@ void Base::swapchainCreate()
     vonk__check(vkCreateImageView(mDevice.handle, &imageViewCI, nullptr, &mSwapChain.views[i]));
   }
 
-  // // . Setup default framebuffers
-  // VkImageView attachments[1];
+  // . Setup default framebuffers' depth-stencil
+  mDefaultDepthTexture = vonk::create::texture(
+    mDevice.handle,
+    mGpu.memory,
+    mSwapChain.settings.extent2D,
+    mSwapChain.settings.depthFormat,
+    VK_SAMPLE_COUNT_1_BIT,
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    VK_IMAGE_ASPECT_DEPTH_BIT);
 
-  // // Depth/Stencil attachment is the same for all frame buffers
-  // attachments[1] = depthStencil.view;
-
-  // VkFramebufferCreateInfo frameBufferCreateInfo = {};
-  // frameBufferCreateInfo.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  // frameBufferCreateInfo.pNext                   = NULL;
-  // frameBufferCreateInfo.renderPass              = renderPass;
-  // frameBufferCreateInfo.attachmentCount         = 2;
-  // frameBufferCreateInfo.pAttachments            = attachments;
-  // frameBufferCreateInfo.width                   = width;
-  // frameBufferCreateInfo.height                  = height;
-  // frameBufferCreateInfo.layers                  = 1;
-
-  // // Create frame buffers for every swap chain image
-  // frameBuffers.resize(swapChain.imageCount);
-  // for (uint32_t i = 0; i < frameBuffers.size(); i++) {
-  //   attachments[0] = swapChain.buffers[i].view;
-  //   VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
-  // }
+  // . Setup default framebuffers
+  VkImageView attachments[2];
+  attachments[1] = mDefaultDepthTexture.view;  // Depth
+  mDefaultFrameBuffers.resize(mSwapChain.settings.minImageCount);
+  VkFramebufferCreateInfo const frameBufferCI = {
+    .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+    .pNext           = NULL,
+    .renderPass      = mDefaultRenderPass,
+    .attachmentCount = 2,
+    .pAttachments    = attachments,
+    .width           = mSwapChain.settings.extent2D.width,
+    .height          = mSwapChain.settings.extent2D.height,
+    .layers          = 1,
+  };
+  for (uint32_t i = 0; i < mDefaultFrameBuffers.size(); ++i) {
+    attachments[0] = mSwapChain.views[i];  // Color
+    vonk__check(vkCreateFramebuffer(mDevice.handle, &frameBufferCI, nullptr, &mDefaultFrameBuffers[i]));
+  }
 }
 
 //-----------------------------------------------
 
 void Base::swapchainCleanUp()
 {
-  // for (auto &scene : mScenes) {
-  //   for (auto framebuffer : scene.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
-
-  //   auto &cb = scene.commandBuffers;
-  //   if (cb.size() > 0) {
-  //     vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vonk__getSize(cb), vonk__getData(cb));
-  //   }
-
-  //   vkDestroyPipeline(mDevice.handle, scene.handle, nullptr);
-  //   vkDestroyPipelineLayout(mDevice.handle, scene.layout, nullptr);
-  //   vkDestroyRenderPass(mDevice.handle, scene.renderpass, nullptr);  // after: mPipelineLayout
-  // }
-
   for (auto &pipeline : mPipelines) {
     auto &cb = pipeline.commandBuffers;
     if (cb.size() > 0) {
@@ -510,6 +509,13 @@ void Base::swapchainCleanUp()
 
     for (auto framebuffer : pipeline.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
   }
+
+  // @DANI move this to vonk::destoy::texture(Texture_t)
+  vkDestroyImageView(mDevice.handle, mDefaultDepthTexture.view, nullptr);
+  vkDestroyImage(mDevice.handle, mDefaultDepthTexture.image, nullptr);
+  vkFreeMemory(mDevice.handle, mDefaultDepthTexture.memory, nullptr);
+
+  for (auto framebuffer : mDefaultFrameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
 
   for (auto imageView : mSwapChain.views) { vkDestroyImageView(mDevice.handle, imageView, nullptr); }
 
@@ -532,7 +538,9 @@ void Base::swapchainReCreate()
       mPipelinesCI[i],
       mSwapChain,
       mDevice.handle,
-      mDevice.commandPool);
+      mDevice.commandPool,
+      mDefaultRenderPass,
+      mDefaultFrameBuffers);
   }
 }
 

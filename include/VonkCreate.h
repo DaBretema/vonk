@@ -1,10 +1,10 @@
 #pragma once
-#include "_vulkan.h"
 #include "VonkTypes.h"
+#include "_vulkan.h"
 
 #include "Macros.h"
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 namespace vonk::create
 {  //
@@ -124,7 +124,7 @@ inline vonk::FixedFuncs_t fixedFuncs()
   };
 
   return FF;
-}  // inline FixedFuncs_t fixedFuncs(VkExtent2D extent2D)
+}
 
 //-----------------------------------------------
 
@@ -147,18 +147,76 @@ inline VkRenderPass renderpass(VkDevice device, RenderPassData_t rpd)
 
 //-----------------------------------------------
 
+inline Texture_t texture(
+  VkDevice                         device,
+  VkPhysicalDeviceMemoryProperties memProps,
+  VkExtent2D                       extent2D,
+  VkFormat                         format,
+  VkSampleCountFlagBits            samples,
+  VkImageUsageFlags                usage,
+  VkImageAspectFlagBits            aspectMaskBits)
+{
+  Texture_t tex;
+
+  // . Image
+  VkImageCreateInfo const imageCI {
+    .sType       = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    .imageType   = VK_IMAGE_TYPE_2D,
+    .format      = format,
+    .extent      = { extent2D.width, extent2D.height, 1 },
+    .mipLevels   = 1,
+    .arrayLayers = 1,
+    .samples     = samples,
+    .tiling      = VK_IMAGE_TILING_OPTIMAL,
+    .usage       = usage,
+  };
+  vonk__check(vkCreateImage(device, &imageCI, nullptr, &tex.image));
+
+  // . Memory
+  VkMemoryRequirements memReqs {};
+  vkGetImageMemoryRequirements(device, tex.image, &memReqs);
+  VkMemoryAllocateInfo const memAllloc {
+    .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize  = memReqs.size,
+    .memoryTypeIndex = vonk::memory::getType(memProps, memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+  };
+  vonk__check(vkAllocateMemory(device, &memAllloc, nullptr, &tex.memory));
+  vonk__check(vkBindImageMemory(device, tex.image, tex.memory, 0));
+
+  // . View
+  bool const needStencilBit = (VK_IMAGE_ASPECT_DEPTH_BIT & aspectMaskBits) && format >= VK_FORMAT_D16_UNORM_S8_UINT;
+  auto const stencilBit     = (needStencilBit) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0u;
+  VkImageViewCreateInfo const imageViewCI {
+    .sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+    .viewType                        = VK_IMAGE_VIEW_TYPE_2D,
+    .image                           = tex.image,
+    .format                          = format,
+    .subresourceRange.baseMipLevel   = 0,
+    .subresourceRange.levelCount     = 1,
+    .subresourceRange.baseArrayLayer = 0,
+    .subresourceRange.layerCount     = 1,
+    .subresourceRange.aspectMask     = aspectMaskBits | stencilBit,
+  };
+  vonk__check(vkCreateImageView(device, &imageViewCI, nullptr, &tex.view));
+
+  return tex;
+}
+
+//-----------------------------------------------
+
 inline void pipelineRecreation(
-  Pipeline_t &         pipeline,
-  bool                 onlyRecreateImageViewDependencies,
-  PipelineCreateInfo_t ci,
-  SwapChain_t const &  swapchain,
-  VkDevice             device,
-  VkCommandPool        commandPool,
-  bool                 useAsOutput = true)
+  Pipeline_t &               pipeline,
+  bool                       onlyRecreateImageViewDependencies,
+  PipelineCreateInfo_t       ci,
+  SwapChain_t const &        swapchain,
+  VkDevice                   device,
+  VkCommandPool              commandPool,
+  VkRenderPass               renderpass,
+  std::vector<VkFramebuffer> frameBuffers)
 {
   if (!onlyRecreateImageViewDependencies) {
     // . Render Pass
-    pipeline.renderpass = renderpass(device, ci.renderPassData);
+    pipeline.renderpass = renderpass;  // renderpass(device, ci.renderPassData);
 
     // . Shaders
     for (auto const &sd : ci.shadersData) {
@@ -174,7 +232,7 @@ inline void pipelineRecreation(
     std::vector<VkDynamicState> const dynamicStates = {
       VK_DYNAMIC_STATE_VIEWPORT,  //
       VK_DYNAMIC_STATE_SCISSOR,   //
-      // VK_DYNAMIC_STATE_LINE_WIDTH  //
+                                  // VK_DYNAMIC_STATE_LINE_WIDTH  //
     };
     MBU VkPipelineDynamicStateCreateInfo const dynamicStateCI {
       .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
@@ -212,8 +270,9 @@ inline void pipelineRecreation(
   }
 
   // . Set Viewports and Scissors.
-  // NOTE_1: If the Viewport size is negative, read it as percentage of current swapchain-size
-  // NOTE_2: If the Scissor size is UINT32_MAX, set the current swapchain-size
+  // NOTE_1: If the Viewport size is negative, read it as percentage of current
+  // swapchain-size NOTE_2: If the Scissor size is UINT32_MAX, set the current
+  // swapchain-size
   float const             swapH = swapchain.settings.extent2D.height;
   float const             swapW = swapchain.settings.extent2D.width;
   std::vector<VkViewport> viewports;
@@ -231,26 +290,27 @@ inline void pipelineRecreation(
     if (s.extent.width == UINT32_MAX) { s.extent.width = swapW; }
   }
 
-  // . Set framebuffers
-  if (useAsOutput) {
-    pipeline.frameBuffers.resize(swapchain.views.size());
-    for (size_t i = 0; i < swapchain.views.size(); ++i) {
-      VkImageView const             attachments[] = { swapchain.views[i] };
-      VkFramebufferCreateInfo const framebufferCI {
-        .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass      = pipeline.renderpass,
-        .attachmentCount = 1,  // Modify this for MRT ??
-        .pAttachments    = attachments,
-        .width           = swapchain.settings.extent2D.width,
-        .height          = swapchain.settings.extent2D.height,
-        .layers          = 1,
-      };
-      vonk__check(vkCreateFramebuffer(device, &framebufferCI, nullptr, &pipeline.frameBuffers[i]));
-    }
-  }
+  // // . Set framebuffers
+  // if (useAsOutput) {
+  //   pipeline.frameBuffers.resize(swapchain.views.size());
+  //   for (size_t i = 0; i < swapchain.views.size(); ++i) {
+  //     VkImageView const             attachments[] = { swapchain.views[i] };
+  //     VkFramebufferCreateInfo const framebufferCI {
+  //       .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+  //       .renderPass      = pipeline.renderpass,
+  //       .attachmentCount = 1,  // Modify this for MRT ??
+  //       .pAttachments    = attachments,
+  //       .width           = swapchain.settings.extent2D.width,
+  //       .height          = swapchain.settings.extent2D.height,
+  //       .layers          = 1,
+  //     };
+  //     vonk__check(vkCreateFramebuffer(device, &framebufferCI, nullptr,
+  //     &pipeline.frameBuffers[i]));
+  //   }
+  // }
 
   // . Commad Buffers Allocation
-  pipeline.commandBuffers.resize(pipeline.frameBuffers.size());
+  pipeline.commandBuffers.resize(frameBuffers.size() /* pipeline.frameBuffers.size() */);
   VkCommandBufferAllocateInfo const commandBufferAllocInfo {
     .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
     .commandPool        = commandPool,
@@ -271,8 +331,9 @@ inline void pipelineRecreation(
                                                   { .depthStencil = commandBuffesData.clearDephtStencil } };
 
     VkRenderPassBeginInfo renderpassBI {
-      .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-      .renderPass      = pipeline.renderpass,  // with multiple renderpasses: commandBuffesData.renderPassIdx
+      .sType      = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .renderPass = pipeline.renderpass,  // with multiple renderpasses:
+      // commandBuffesData.renderPassIdx
       .clearValueCount = vonk__getSize(clearValues),
       .pClearValues    = vonk__getData(clearValues),
       // ?? Use this both for blitting.
@@ -282,12 +343,14 @@ inline void pipelineRecreation(
 
     for (size_t i = 0; i < pipeline.commandBuffers.size(); ++i) {
       auto const commandBuffer = pipeline.commandBuffers[i];
-      renderpassBI.framebuffer = pipeline.frameBuffers[i];
+      renderpassBI.framebuffer = frameBuffers.at(i);  // pipeline.frameBuffers[i];
       vonk__check(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
       vkCmdBeginRenderPass(commandBuffer, &renderpassBI, VK_SUBPASS_CONTENTS_INLINE);
       vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-      vkCmdSetViewport(commandBuffer, 0, vonk__getSize(viewports), vonk__getData(viewports));  // Dynamic Viewport
-      vkCmdSetScissor(commandBuffer, 0, vonk__getSize(scissors), vonk__getData(scissors));     // Dynamic Scissors
+      vkCmdSetViewport(commandBuffer, 0, vonk__getSize(viewports),
+                       vonk__getData(viewports));  // Dynamic Viewport
+      vkCmdSetScissor(commandBuffer, 0, vonk__getSize(scissors),
+                      vonk__getData(scissors));  // Dynamic Scissors
       if (commandBuffesData.commands) { commandBuffesData.commands(commandBuffer); }
       vkCmdEndRenderPass(commandBuffer);
       vonk__check(vkEndCommandBuffer(commandBuffer));
@@ -295,11 +358,18 @@ inline void pipelineRecreation(
   }
 }
 
-inline Pipeline_t
-  pipeline(PipelineCreateInfo_t ci, SwapChain_t const &swapchain, VkDevice device, VkCommandPool commandPool)
+//-----------------------------------------------
+
+inline Pipeline_t pipeline(
+  PipelineCreateInfo_t       ci,
+  SwapChain_t const &        swapchain,
+  VkDevice                   device,
+  VkCommandPool              commandPool,
+  VkRenderPass               renderpass,
+  std::vector<VkFramebuffer> frameBuffers)
 {
   Pipeline_t pipeline;
-  pipelineRecreation(pipeline, false, ci, swapchain, device, commandPool);
+  pipelineRecreation(pipeline, false, ci, swapchain, device, commandPool, renderpass, frameBuffers);
 
   return pipeline;
 }

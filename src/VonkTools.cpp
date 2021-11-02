@@ -9,8 +9,41 @@ namespace vonk
 //
 
 //=============================================================================
+// ---- Memory ----
+//=============================================================================
+
+namespace memory
+{  //
+
+  /**
+   * Get the index of a memory type that has all the requested property bits set
+   * @param typeBits Bit mask with bits set for each memory type supported by the resource to request for (from
+   * VkMemoryRequirements)
+   * @param properties Bit mask of properties for the memory type to request.
+   * @param (Optional) memTypeFound Pointer to a bool that is set to true if a matching memory type has been found.
+   * @return Index of the requested memory type.
+   */
+  uint32_t getType(VkPhysicalDeviceMemoryProperties memProps, uint32_t typeBits, VkMemoryPropertyFlags requestedProps)
+  {
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+      bool const propsMatch = (memProps.memoryTypes[i].propertyFlags & requestedProps) == requestedProps;
+      if ((typeBits & 1) == 1 && propsMatch) { return i; }
+      typeBits >>= 1;
+    }
+    vo__abort("Couldn't get requested memory properties");
+    return 0;
+  }
+
+}  // namespace memory
+
+//=============================================================================
+
+//
+
+//=============================================================================
 // ---- Others ----
 //=============================================================================
+
 namespace others
 {  //
 
