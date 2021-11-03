@@ -69,9 +69,10 @@ namespace vo
   if (VkResult res = vulkanCode; res != VK_SUCCESS) { vo__abortf("{} : {}", res, #vulkanCode); }
 
 // ::: Cast shortcut
-#define vonk__castSize(v) static_cast<uint32_t>(v)
-#define vonk__getSize(v)  vonk__castSize(v.size())
-#define vonk__getData(v)  v.data()
+#define vonk__castSize(v)           static_cast<uint32_t>(v)
+#define vonk__getSize(v)            vonk__castSize(v.size())
+#define vonk__getData(v)            v.data()
+#define vonk__getDataAs(newType, v) reinterpret_cast<newType>(vonk__getData(v))
 
 // ::: Get instance functions
 #define vonk__instanceFn(instance, extName, ...)                                  \

@@ -101,14 +101,62 @@ struct SyncBase_t
 
 //-----------------------------------------------
 
-struct FixedFuncs_t
+// struct FixedFuncs_t
+// {
+//   VkPipelineRasterizationStateCreateInfo           rasterizationStateCI;
+//   VkPipelineMultisampleStateCreateInfo             multisamplingCI;
+//   VkPipelineDepthStencilStateCreateInfo            depthstencilCI;
+//   std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
+//   VkPipelineColorBlendStateCreateInfo              blendingCI;
+// };
+
+namespace BlendType
 {
-  VkPipelineRasterizationStateCreateInfo           rasterizationStateCI;
-  VkPipelineMultisampleStateCreateInfo             multisamplingCI;
-  VkPipelineDepthStencilStateCreateInfo            depthstencilCI;
-  std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
-  VkPipelineColorBlendStateCreateInfo              blendingCI;
-};
+  VkPipelineColorBlendAttachmentState const None = {
+    .blendEnable         = VK_FALSE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .colorBlendOp        = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .alphaBlendOp        = VK_BLEND_OP_ADD,
+    .colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+  VkPipelineColorBlendAttachmentState const Additive = {
+    .blendEnable         = VK_TRUE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+    .colorBlendOp        = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .alphaBlendOp        = VK_BLEND_OP_ADD,
+    .colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+  VkPipelineColorBlendAttachmentState const StraightAlpha = {
+    .blendEnable         = VK_FALSE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .colorBlendOp        = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .alphaBlendOp        = VK_BLEND_OP_ADD,
+    .colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+  VkPipelineColorBlendAttachmentState const StraightColor = {
+    .blendEnable         = VK_FALSE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .colorBlendOp        = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .alphaBlendOp        = VK_BLEND_OP_ADD,
+    .colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+  };
+}  // namespace BlendType
 
 //-----------------------------------------------
 
@@ -175,7 +223,7 @@ struct PipelineLayoutData_t
     .pVertexAttributeDescriptions    = nullptr,  // Optional
   };
 
-  // . Input-State Assembly : Probably could be 'static'
+  // . Input-State Assembly : Probably will be always the same
   VkPipelineInputAssemblyStateCreateInfo inputstateAssemblyCI {
     .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
     .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -183,16 +231,33 @@ struct PipelineLayoutData_t
   };
 };
 
-struct PipelineCreateInfo_t
+struct PipelineData_t
 {
   // . Static
-  FixedFuncs_t         fixedFuncs;
+  VkPolygonMode         ffPolygonMode       = VK_POLYGON_MODE_FILL;
+  VkCullModeFlags       ffCullMode          = VK_CULL_MODE_BACK_BIT;
+  VkFrontFace           ffTriangleDirection = VK_FRONT_FACE_CLOCKWISE;
+  VkSampleCountFlagBits ffSamples           = VK_SAMPLE_COUNT_1_BIT;
+  VkCompareOp           ffDepthOp           = VK_COMPARE_OP_LESS;
+
+  // FixedFuncs_t         fixedFuncs;
   ShadersData_t        shadersData;
   RenderPassData_t     renderPassData;
   PipelineLayoutData_t pipelineLayoutData;
+
   // . Dynamic
-  std::vector<VkViewport> viewports;
-  std::vector<VkRect2D>   scissors;
+  std::vector<VkViewport> viewports = { {
+    .x        = 0.f,
+    .y        = 0.f,
+    .width    = -100.f,
+    .height   = -100.f,
+    .minDepth = 0.0f,
+    .maxDepth = 1.0f,
+  } };
+  std::vector<VkRect2D>   scissors  = { {
+    .offset = { 0, 0 },
+    .extent = { UINT32_MAX, UINT32_MAX },
+  } };
   CommandBuffersData_t    commandBuffersData;
 };
 

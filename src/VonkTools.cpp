@@ -453,17 +453,19 @@ namespace shaders
     VkShaderModuleCreateInfo const shadermoduleCI {
       .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
       .codeSize = vonk__getSize(code),
-      .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
+      // .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
+      .pCode = vonk__getDataAs(const uint32_t *, code),
     };
 
     VkShaderModule shadermodule;
+    // @DANI : Add a cache system to avoid create many times the same shader :D
     vonk__check(vkCreateShaderModule(logicalDevice, &shadermoduleCI, nullptr, &shadermodule));
 
-    VkPipelineShaderStageCreateInfo shaderStageCI {
+    VkPipelineShaderStageCreateInfo const shaderStageCI {
       .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage  = stage,
       .module = shadermodule,
-      .pName  = "main",  // Entrypoint function name
+      .pName  = "main",  // MUST : Entrypoint function name
     };
 
     return { path, shadermodule, shaderStageCI };

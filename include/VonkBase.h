@@ -19,7 +19,7 @@ public:
   void cleanup();
   void drawFrame();
   void waitDevice();
-  void addPipeline(PipelineCreateInfo_t const &ci);
+  void addPipeline(PipelineData_t const &ci);
 
   inline auto currentFormat() const { return mSwapChain.settings.colorFormat; }
 
@@ -42,9 +42,9 @@ private:
   VkRenderPass               mDefaultRenderPass;
   std::vector<VkFramebuffer> mDefaultFrameBuffers;
 
-  std::vector<Pipeline_t>           mPipelines;
-  std::vector<PipelineCreateInfo_t> mPipelinesCI;
-  uint32_t                          mActivePipeline = 0u;
+  std::vector<Pipeline_t>     mPipelines;
+  std::vector<PipelineData_t> mPipelinesCI;
+  uint32_t                    mActivePipeline = 0u;
 
 };  // class Base
 }  // namespace vonk

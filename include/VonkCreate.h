@@ -51,83 +51,6 @@ inline VkInstance instance(
 
 //-----------------------------------------------
 
-inline vonk::FixedFuncs_t fixedFuncs()
-{
-  vonk::FixedFuncs_t FF = {};
-
-  // . Rasterization
-  FF.rasterizationStateCI = {
-    .sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-    .polygonMode             = VK_POLYGON_MODE_FILL,
-    .cullMode                = VK_CULL_MODE_BACK_BIT,
-    .frontFace               = VK_FRONT_FACE_CLOCKWISE,
-    .lineWidth               = 1.0f,
-    .rasterizerDiscardEnable = VK_FALSE,  // Disable any output
-    .depthClampEnable        = VK_FALSE,  // Useful for shadows stuff
-    .depthBiasEnable         = VK_FALSE,  // Useful for shadows stuff
-    .depthBiasConstantFactor = 0.0f,      // Useful for shadows stuff // Optional
-    .depthBiasClamp          = 0.0f,      // Useful for shadows stuff // Optional
-    .depthBiasSlopeFactor    = 0.0f,      // Useful for shadows stuff // Optional
-  };
-
-  // . Multisampling : Default OFF
-  FF.multisamplingCI = {
-    .sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-    .sampleShadingEnable   = VK_FALSE,
-    .rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
-    .minSampleShading      = 1.0f,      // Optional
-    .pSampleMask           = nullptr,   // Optional
-    .alphaToCoverageEnable = VK_FALSE,  // Optional
-    .alphaToOneEnable      = VK_FALSE,  // Optional
-  };
-
-  // . Depth (default ON) / Stencil (default OFF)
-  FF.depthstencilCI = {
-    .sType             = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-    .stencilTestEnable = VK_FALSE,
-    .depthWriteEnable  = VK_TRUE,
-    .depthTestEnable   = VK_TRUE,
-    .depthCompareOp    = VkCompareOp::VK_COMPARE_OP_LESS,
-  };
-
-  // . Blending
-  FF.blendingPerAttachment = { {
-    // * Color pass through
-    .blendEnable         = VK_FALSE,
-    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,   // Optional, (bc is the default ??)
-    .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,  // Optional, (bc is the default ??)
-    .colorBlendOp        = VK_BLEND_OP_ADD,       // Optional, (bc is the default ??)
-    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,   // Optional, (bc is the default ??)
-    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,  // Optional, (bc is the default ??)
-    .alphaBlendOp        = VK_BLEND_OP_ADD,       // Optional, (bc is the default ??)
-    .colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-    // * Classic alpha blending
-    // .blendEnable         = VK_TRUE,
-    // .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-    // .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-    // .colorBlendOp        = VK_BLEND_OP_ADD,
-    // .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-    // .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-    // .alphaBlendOp        = VK_BLEND_OP_ADD,
-  } };
-  FF.blendingCI            = {
-    .sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-    .logicOpEnable     = VK_FALSE,
-    .logicOp           = VK_LOGIC_OP_COPY,  // Optional
-    .attachmentCount   = vonk__getSize(FF.blendingPerAttachment),
-    .pAttachments      = vonk__getData(FF.blendingPerAttachment),
-    .blendConstants[0] = 0.0f,  // Optional
-    .blendConstants[1] = 0.0f,  // Optional
-    .blendConstants[2] = 0.0f,  // Optional
-    .blendConstants[3] = 0.0f,  // Optional
-  };
-
-  return FF;
-}
-
-//-----------------------------------------------
-
 inline VkRenderPass renderpass(VkDevice device, RenderPassData_t rpd)
 {
   VkRenderPassCreateInfo const renderpassCI {
@@ -183,7 +106,7 @@ inline Texture_t texture(
   vonk__check(vkAllocateMemory(device, &memAllloc, nullptr, &tex.memory));
   vonk__check(vkBindImageMemory(device, tex.image, tex.memory, 0));
 
-  // . View
+  // . View : add stencil bit if is depth texture and the format allows
   bool const needStencilBit = (VK_IMAGE_ASPECT_DEPTH_BIT & aspectMaskBits) && format >= VK_FORMAT_D16_UNORM_S8_UINT;
   auto const stencilBit     = (needStencilBit) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0u;
   VkImageViewCreateInfo const imageViewCI {
@@ -207,14 +130,72 @@ inline Texture_t texture(
 inline void pipelineRecreation(
   Pipeline_t &               pipeline,
   bool                       onlyRecreateImageViewDependencies,
-  PipelineCreateInfo_t       ci,
+  PipelineData_t             ci,
   SwapChain_t const &        swapchain,
   VkDevice                   device,
   VkCommandPool              commandPool,
   VkRenderPass               renderpass,
   std::vector<VkFramebuffer> frameBuffers)
 {
+  /*
+
+  // Separated logic
+    auto const createPipeline = [&]() {
+
+    };
+    auto const createCommands = [&]() {
+
+    };
+
+  // Behaviour
+    if(!onlyRecreateImageViewDependencies) {
+      createPipeline();
+    }
+    createCommands();
+
+  */
+
   if (!onlyRecreateImageViewDependencies) {
+    // . FIXED FUNCS - Rasterization
+    VkPipelineRasterizationStateCreateInfo const rasterizationStateCI = {
+      .sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      .polygonMode = ci.ffPolygonMode,
+      .cullMode    = ci.ffCullMode,
+      .frontFace   = ci.ffTriangleDirection,
+      .lineWidth   = 1.0f,
+    };
+
+    // . FIXED FUNCS - Multisampling : Default OFF == 1_BIT
+    VkPipelineMultisampleStateCreateInfo const multisamplingCI = {
+      .sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+      .rasterizationSamples = ci.ffSamples,
+      .sampleShadingEnable  = VK_FALSE,
+      .minSampleShading     = 1.0f,
+    };
+
+    // . FIXED FUNCS - Depth (default ON) / Stencil (default OFF)
+    VkPipelineDepthStencilStateCreateInfo const depthstencilCI = {
+      .sType             = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+      .depthWriteEnable  = (ci.ffDepthOp != VkCompareOp::VK_COMPARE_OP_MAX_ENUM),
+      .depthTestEnable   = (ci.ffDepthOp != VkCompareOp::VK_COMPARE_OP_MAX_ENUM),
+      .depthCompareOp    = ci.ffDepthOp,
+      .stencilTestEnable = VK_FALSE,
+    };
+
+    // . FIXED FUNCS - Blending   @DANI NOTE : num of BlendTypes == num of renderpass' attachments.
+    std::vector<VkPipelineColorBlendAttachmentState> const blendingPerAttachment = { { BlendType::None } };
+    VkPipelineColorBlendStateCreateInfo const              blendingCI            = {
+      .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+      .logicOpEnable   = VK_FALSE,
+      .logicOp         = VK_LOGIC_OP_COPY,  // Optional
+      .attachmentCount = vonk__getSize(blendingPerAttachment),
+      .pAttachments    = vonk__getData(blendingPerAttachment),
+      // .blendConstants[0] = 0.0f,  // Optional
+      // .blendConstants[1] = 0.0f,  // Optional
+      // .blendConstants[2] = 0.0f,  // Optional
+      // .blendConstants[3] = 0.0f,  // Optional
+    };
+
     // . Render Pass
     pipeline.renderpass = renderpass;  // renderpass(device, ci.renderPassData);
 
@@ -228,13 +209,12 @@ inline void pipelineRecreation(
     // . Pipeline Layout
     vonk__check(vkCreatePipelineLayout(device, &ci.pipelineLayoutData.pipelineLayoutCI, nullptr, &pipeline.layout));
 
-    // . Pipeline : @DANI research about PipelineCache object
+    // . Pipeline   @DANI NOTE : Research about PipelineCache object.
     std::vector<VkDynamicState> const dynamicStates = {
       VK_DYNAMIC_STATE_VIEWPORT,  //
       VK_DYNAMIC_STATE_SCISSOR,   //
-                                  // VK_DYNAMIC_STATE_LINE_WIDTH  //
     };
-    MBU VkPipelineDynamicStateCreateInfo const dynamicStateCI {
+    VkPipelineDynamicStateCreateInfo const dynamicStateCI {
       .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
       .dynamicStateCount = vonk__getSize(dynamicStates),
       .pDynamicStates    = vonk__getData(dynamicStates),
@@ -255,10 +235,10 @@ inline void pipelineRecreation(
       .pVertexInputState   = &ci.pipelineLayoutData.inputstateVertexCI,
       .pInputAssemblyState = &ci.pipelineLayoutData.inputstateAssemblyCI,
       .pViewportState      = &viewportStateCI,
-      .pRasterizationState = &ci.fixedFuncs.rasterizationStateCI,
-      .pMultisampleState   = &ci.fixedFuncs.multisamplingCI,
-      .pDepthStencilState  = &ci.fixedFuncs.depthstencilCI,
-      .pColorBlendState    = &ci.fixedFuncs.blendingCI,
+      .pRasterizationState = &rasterizationStateCI,
+      .pMultisampleState   = &multisamplingCI,
+      .pDepthStencilState  = &depthstencilCI,
+      .pColorBlendState    = &blendingCI,
       .pDynamicState       = &dynamicStateCI,  // Optional
       .layout              = pipeline.layout,
       .renderPass          = pipeline.renderpass,
@@ -347,10 +327,8 @@ inline void pipelineRecreation(
       vonk__check(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
       vkCmdBeginRenderPass(commandBuffer, &renderpassBI, VK_SUBPASS_CONTENTS_INLINE);
       vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-      vkCmdSetViewport(commandBuffer, 0, vonk__getSize(viewports),
-                       vonk__getData(viewports));  // Dynamic Viewport
-      vkCmdSetScissor(commandBuffer, 0, vonk__getSize(scissors),
-                      vonk__getData(scissors));  // Dynamic Scissors
+      vkCmdSetViewport(commandBuffer, 0, vonk__getSize(viewports), vonk__getData(viewports));  // Dynamic Viewport
+      vkCmdSetScissor(commandBuffer, 0, vonk__getSize(scissors), vonk__getData(scissors));     // Dynamic Scissors
       if (commandBuffesData.commands) { commandBuffesData.commands(commandBuffer); }
       vkCmdEndRenderPass(commandBuffer);
       vonk__check(vkEndCommandBuffer(commandBuffer));
@@ -361,7 +339,7 @@ inline void pipelineRecreation(
 //-----------------------------------------------
 
 inline Pipeline_t pipeline(
-  PipelineCreateInfo_t       ci,
+  PipelineData_t             ci,
   SwapChain_t const &        swapchain,
   VkDevice                   device,
   VkCommandPool              commandPool,

@@ -38,7 +38,7 @@ Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
 
 //----------------------------------------------- !!
 
-void Base::addPipeline(PipelineCreateInfo_t const &ci)
+void Base::addPipeline(PipelineData_t const &ci)
 {
   mPipelinesCI.push_back(ci);
   mPipelines.push_back(vonk::create::pipeline(
@@ -246,7 +246,6 @@ void Base::init()
   VkCommandPoolCreateInfo const commandPoolCI {
     .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     .queueFamilyIndex = mDevice.queuesIndices.graphics,
-    .flags            = 0,  // Optional
   };
   vonk__check(vkCreateCommandPool(mDevice.handle, &commandPoolCI, nullptr, &mDevice.commandPool));
 
@@ -323,6 +322,7 @@ void Base::init()
       .pResolveAttachments     = nullptr,
     },
   };
+  // @DANI : research more about the implications of this
   rpd.subpassDeps = {
     // 0
     {
