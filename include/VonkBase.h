@@ -1,9 +1,9 @@
 #pragma once
 
-#include "_vulkan.h"
 #include <vector>
 #include <unordered_map>
 
+#include "_vulkan.h"
 #include "VonkTypes.h"
 #include "VonkTools.h"
 
@@ -30,8 +30,6 @@ private:
   void swapchainReCreate();
   void swapchainCleanUp();
 
-  static const inline uint32_t sInFlightMaxFrames = 3;
-
   Instance_t  mInstance;
   Gpu_t       mGpu;
   Device_t    mDevice;
@@ -45,6 +43,12 @@ private:
   std::vector<Pipeline_t>     mPipelines;
   std::vector<PipelineData_t> mPipelinesCI;
   uint32_t                    mActivePipeline = 0u;
+
+  // Settings:
+  uint32_t                  sInFlightMaxFrames  = 3;
+  std::vector<const char *> sValidationLayers   = { "VK_LAYER_KHRONOS_validation" };
+  std::vector<const char *> sInstanceExtensions = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
+  std::vector<const char *> sDeviceExtensions   = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 };  // class Base
 }  // namespace vonk

@@ -9,7 +9,7 @@ namespace vonk
 //-----------------------------------------------
 
 // @DANI move this to 'VonkUtils' also rename it to 'VonkTools'
-Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
+Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface, std::vector<const char *> const &deviceExts)
 {
   Gpu_t gpu;
   gpu.handle = pd;
@@ -22,9 +22,9 @@ Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface)
   if (queueIndicesIsComplete) { gpu.queuesIndices = vonk::queue::unrollOptionals(queueIndicesOpt); }
 
   if (
-    !queueIndicesIsComplete                                                    //
-    or vonk::swapchain::isEmpty(pd, surface)                                   //
-    or !vonk::others::checkDeviceExtensionsSupport(pd, vo::sDeviceExtensions)  //
+    !queueIndicesIsComplete                                         //
+    or vonk::swapchain::isEmpty(pd, surface)                        //
+    or !vonk::others::checkDeviceExtensionsSupport(pd, deviceExts)  //
     // or !gpu.features.geometryShader                                           //
   ) {
     return gpu;
@@ -156,22 +156,19 @@ void Base::init()
   //=====
   //=====   SETTINGS
 
-  if (!vonk::others::checkValidationLayersSupport(vo::sValidationLayers)) {
+  if (!vonk::others::checkValidationLayersSupport(sValidationLayers)) {
     vo__abort("Validation layers requested, but not available!");
   }
 
   //=====
   //=====   CREATE INSTANCE
-  mInstance.handle = vonk::create::instance(
-    vonk::window::title.c_str(),
-    vonk::others::getInstanceExtensions(),
-    vo::sValidationLayers,
-    VK_API_VERSION_1_2);
+  mInstance.handle =
+    vonk::create::instance(vonk::window::title.c_str(), sInstanceExtensions, sValidationLayers, VK_API_VERSION_1_2);
 
   //=====
   //=====   CREATE DEBUG MESSENGER
 
-  vonk::debugmessenger::create(mInstance.handle, mInstance.debugger);
+  vonk::debugmessenger::create(mInstance.handle, mInstance.debugger, sValidationLayers);
 
   //=====
   //=====   CREATE SURFACE  (@DANI: Check for headless Vulkan in a future)
@@ -188,7 +185,7 @@ void Base::init()
 
   uint32_t maxScore = 0;
   for (const auto &pd : gpus) {
-    auto const gpu = getGpuDataAndScore(pd, mInstance.surface);
+    auto const gpu = getGpuDataAndScore(pd, mInstance.surface, sDeviceExtensions);
     if (gpu.score > maxScore) {
       mGpu     = gpu;
       maxScore = gpu.score;
@@ -227,11 +224,11 @@ void Base::init()
     .queueCreateInfoCount = vonk__getSize(queueCIs),
     .pQueueCreateInfos    = vonk__getData(queueCIs),
     // Set device extensions
-    .enabledExtensionCount   = vonk__getSize(vo::sDeviceExtensions),
-    .ppEnabledExtensionNames = vonk__getData(vo::sDeviceExtensions),
+    .enabledExtensionCount   = vonk__getSize(sDeviceExtensions),
+    .ppEnabledExtensionNames = vonk__getData(sDeviceExtensions),
     // Set device validation layers
-    .enabledLayerCount   = vonk__getSize(vo::sValidationLayers),
-    .ppEnabledLayerNames = vonk__getData(vo::sValidationLayers),
+    .enabledLayerCount   = vonk__getSize(sValidationLayers),
+    .ppEnabledLayerNames = vonk__getData(sValidationLayers),
   };
   // . Create Device !
   vonk__check(vkCreateDevice(mGpu.handle, &deviceCI, nullptr, &mDevice.handle));
@@ -394,7 +391,7 @@ void Base::cleanup()
   //=====
   //=====   INSTANCE
 
-  vonk::debugmessenger::destroy(mInstance.handle, mInstance.debugger);
+  vonk::debugmessenger::destroy(mInstance.handle, mInstance.debugger, sValidationLayers);
   vkDestroySurfaceKHR(mInstance.handle, mInstance.surface, nullptr);
   vkDestroyInstance(mInstance.handle, nullptr);
 }

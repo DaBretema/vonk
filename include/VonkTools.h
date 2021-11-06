@@ -37,7 +37,9 @@ namespace memory
 namespace others
 {  //
 
-  std::vector<char const *> getInstanceExtensions();
+  std::vector<char const *> getInstanceExtensions(
+    std::vector<const char *> const &instanceExts,
+    std::vector<const char *> const &validationLayers);
   bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts);
   bool checkValidationLayersSupport(std::vector<char const *> const &layers);
 
@@ -54,8 +56,15 @@ namespace others
 namespace debugmessenger
 {  //
 
-  void create(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle);
-  void destroy(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle);
+  void create(
+    VkInstance const &               instance,
+    VkDebugUtilsMessengerEXT &       debugHandle,
+    std::vector<const char *> const &validationLayers);
+
+  void destroy(
+    VkInstance const &               instance,
+    VkDebugUtilsMessengerEXT &       debugHandle,
+    std::vector<const char *> const &validationLayers);
 
 }  // namespace debugmessenger
 

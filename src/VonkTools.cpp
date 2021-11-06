@@ -49,14 +49,16 @@ namespace others
 
   //-----------------------------------------------
 
-  std::vector<char const *> getInstanceExtensions()
+  std::vector<char const *> getInstanceExtensions(
+    std::vector<const char *> const &instanceExts,
+    std::vector<const char *> const &validationLayers)
   {
-    auto exts = vonk::window::getRequiredInstanceExtensions();
+    std::vector<const char *> exts = vonk::window::getRequiredInstanceExtensions();
 
-    if (vo::sHasValidationLayers) { exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+    if (!validationLayers.empty()) { exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
 
-    if (vo::sHasInstanceExtensions) {
-      for (auto &&ext : vo::sInstanceExtensions) { exts.emplace_back(ext); }
+    if (!instanceExts.empty()) {
+      for (auto &&ext : instanceExts) { exts.emplace_back(ext); }
     }
 
     return exts;
@@ -131,7 +133,10 @@ namespace debugmessenger
 
   //-----------------------------------------------
 
-  void create(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle)
+  void create(
+    VkInstance const &               instance,
+    VkDebugUtilsMessengerEXT &       debugHandle,
+    std::vector<const char *> const &validationLayers)
   {
     static VkDebugUtilsMessengerCreateInfoEXT debugmessengerCreateInfo {
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -151,15 +156,18 @@ namespace debugmessenger
       .flags     = 0,        // Mandatory
     };
 
-    if (!vo::sHasValidationLayers) return;
+    if (validationLayers.empty()) return;
     vonk__instanceFn(instance, vkCreateDebugUtilsMessengerEXT, &debugmessengerCreateInfo, nullptr, &debugHandle);
   }
 
   //-----------------------------------------------
 
-  void destroy(VkInstance const &instance, VkDebugUtilsMessengerEXT &debugHandle)
+  void destroy(
+    VkInstance const &               instance,
+    VkDebugUtilsMessengerEXT &       debugHandle,
+    std::vector<const char *> const &validationLayers)
   {
-    if (!vo::sHasValidationLayers) return;
+    if (validationLayers.empty()) return;
     vonk__instanceFn(instance, vkDestroyDebugUtilsMessengerEXT, debugHandle, nullptr);
   }
 
@@ -437,28 +445,40 @@ namespace shaders
       { VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, "tese" },
     };
 
-    static auto const VwShadersPath = std::string("./assets/shaders/");  // get this path from #define
-    return VwShadersPath + shaderName + "." + sStageToExtension[stage] + ".spv";
+    static auto const sShadersPath = std::string("./assets/shaders/");  // get this path from #define
+
+    return sShadersPath + shaderName + "." + sStageToExtension[stage] + ".spv";
   };
 
-  //---------------------------------------------
+    //---------------------------------------------
+
+#define VONK_SHADER_CACHE 0
 
   ShaderData create(VkDevice logicalDevice, std::string const &name, VkShaderStageFlagBits stage)
   {
-    auto const path = getPath(name.c_str(), stage);
+    std::string const path = getPath(name.c_str(), stage);
 
-    auto const code = vo::files::read(path);
+    // . Evaluate cache first for early return if found
+#if VONK_SHADER_CACHE
+    //  NOTE: Temporary disabled due to requirement of ref_counting system to avoid destoy
+    //  the shadermodule if other item is using it from the cache.
+    static std::unordered_map<std::string, ShaderData> cache = {};
+    if (cache.count(path) > 0) {
+      vo__info("CACHED!!!");
+      return cache.at(path);
+    }
+#endif
+
+    // . Otherwise create the shader for first time
+    std::vector<char> const code = vo::files::read(path);
     if (code.empty()) { vo__errf("Failed to open shader '{}'!", path); }
 
     VkShaderModuleCreateInfo const shadermoduleCI {
       .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
       .codeSize = vonk__getSize(code),
-      // .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
-      .pCode = vonk__getDataAs(const uint32_t *, code),
+      .pCode    = vonk__getDataAs(const uint32_t *, code),
     };
-
     VkShaderModule shadermodule;
-    // @DANI : Add a cache system to avoid create many times the same shader :D
     vonk__check(vkCreateShaderModule(logicalDevice, &shadermoduleCI, nullptr, &shadermodule));
 
     VkPipelineShaderStageCreateInfo const shaderStageCI {
@@ -468,7 +488,13 @@ namespace shaders
       .pName  = "main",  // MUST : Entrypoint function name
     };
 
+// . Finally store this on the cache-map and return
+#if VONK_SHADER_CACHE
+    cache[path] = { path, shadermodule, shaderStageCI };
+    return cache.at(path);
+#else
     return { path, shadermodule, shaderStageCI };
+#endif
   }
 
   //---------------------------------------------

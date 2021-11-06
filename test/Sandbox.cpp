@@ -29,6 +29,10 @@ int main()
   // .
   // . Setup
 
+  // const std::vector<Vertex> vertices = { { { 0.0f, -0.5f }, { 1.0f, 0.0f, 0.0f } },
+  //                                        { { 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f } },
+  //                                        { { -0.5f, 0.5f }, { 0.0f, 0.0f, 1.0f } } };
+
   vonk::PipelineData_t const pipelineCI {
     // Static
     .shadersData = { { "base", VK_SHADER_STAGE_VERTEX_BIT }, { "base", VK_SHADER_STAGE_FRAGMENT_BIT } },
@@ -41,7 +45,7 @@ int main()
   pipelineCI2.commandBuffersData   = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 6, 1, 0, 0); } } },
 
   mVulkan.addPipeline(pipelineCI);
-  mVulkan.addPipeline(pipelineCI2);
+  // mVulkan.addPipeline(pipelineCI2);
 
   // .
   // . Loop

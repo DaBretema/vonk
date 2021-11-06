@@ -12,10 +12,10 @@ namespace vonk::create
 //-----------------------------------------------
 
 inline VkInstance instance(
-  const char *              title,               //
-  std::vector<const char *> instanceExtensions,  //
-  std::vector<const char *> validationLayers,
-  uint32_t                  apiVersion = VK_API_VERSION_1_2)
+  const char *                     title,
+  std::vector<const char *> const &instanceExtensions,
+  std::vector<const char *> const &validationLayers,
+  uint32_t                         apiVersion = VK_API_VERSION_1_2)
 {
   VkApplicationInfo const appInfo {
     .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -26,12 +26,14 @@ inline VkInstance instance(
     .apiVersion         = apiVersion,
   };
 
+  auto const realInstanceExtensions = vonk::others::getInstanceExtensions(instanceExtensions, validationLayers);
+
   VkInstanceCreateInfo const instanceCI {
     .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
     .pApplicationInfo = &appInfo,
     // Esential extensions
-    .enabledExtensionCount   = static_cast<uint32_t>(instanceExtensions.size()),
-    .ppEnabledExtensionNames = instanceExtensions.data(),
+    .enabledExtensionCount   = static_cast<uint32_t>(realInstanceExtensions.size()),
+    .ppEnabledExtensionNames = realInstanceExtensions.data(),
     // Layers
     .enabledLayerCount   = static_cast<uint32_t>(validationLayers.size()),
     .ppEnabledLayerNames = validationLayers.data(),
@@ -51,7 +53,7 @@ inline VkInstance instance(
 
 //-----------------------------------------------
 
-inline VkRenderPass renderpass(VkDevice device, RenderPassData_t rpd)
+inline VkRenderPass renderpass(VkDevice device, RenderPassData_t const &rpd)
 {
   VkRenderPassCreateInfo const renderpassCI {
     .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -71,13 +73,13 @@ inline VkRenderPass renderpass(VkDevice device, RenderPassData_t rpd)
 //-----------------------------------------------
 
 inline Texture_t texture(
-  VkDevice                         device,
-  VkPhysicalDeviceMemoryProperties memProps,
-  VkExtent2D                       extent2D,
-  VkFormat                         format,
-  VkSampleCountFlagBits            samples,
-  VkImageUsageFlags                usage,
-  VkImageAspectFlagBits            aspectMaskBits)
+  VkDevice                                device,
+  VkPhysicalDeviceMemoryProperties const &memProps,
+  VkExtent2D const &                      extent2D,
+  VkFormat const &                        format,
+  VkSampleCountFlagBits const &           samples,
+  VkImageUsageFlags const &               usage,
+  VkImageAspectFlagBits const &           aspectMaskBits)
 {
   Texture_t tex;
 
@@ -190,10 +192,6 @@ inline void pipelineRecreation(
       .logicOp         = VK_LOGIC_OP_COPY,  // Optional
       .attachmentCount = vonk__getSize(blendingPerAttachment),
       .pAttachments    = vonk__getData(blendingPerAttachment),
-      // .blendConstants[0] = 0.0f,  // Optional
-      // .blendConstants[1] = 0.0f,  // Optional
-      // .blendConstants[2] = 0.0f,  // Optional
-      // .blendConstants[3] = 0.0f,  // Optional
     };
 
     // . Render Pass

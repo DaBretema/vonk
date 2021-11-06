@@ -3,38 +3,25 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
-#include "Settings.h"
-
-namespace vo
-{  //
-
-#define MBU           [[maybe_unused]]
-#define vo__ptrstr(p) fmt::format("{}", fmt::ptr(p))
-
-//.
-//.
-//.
+//-----------------------------------------------
 
 //
-// === VONSAI MACROS = vo__
-//-----------------------------------------------------------------------------
-// static inline auto const VO_TRACE = [](int lvl, auto msg) {
-//   std::string const beginLineJumps = lvl < 2 ? "\n\n" : lvl < 3 ? "\n" : "";
+// // === C++ Helpers
+//
 
-//   std::string const byLevelSep  = std::string(4 * (lvl - 1), ' ');
-//   std::string const byLevelMark = lvl < 2 ? "### " : lvl < 3 ? ">> " : lvl < 4 ? "* " : "- ";
-//   // std::string const byLevelMark = std::string(lvl, '>') + ' ';
+//-----------------------------------------------
 
-//   size_t            textSize       = std::string(msg).size() + byLevelMark.size();
-//   std::string const byLevelSubLine = lvl < 3 ? std::string(textSize, '-') + "\n" : "";
+#define MBU [[maybe_unused]]
 
-//   std::string const message = byLevelSep + byLevelMark + msg;
-//   std::string const subLine = "\n" + (lvl < 3 ? byLevelSep : "") + byLevelSubLine;
+//-----------------------------------------------
 
-//   fmt::print("{}{}{}", beginLineJumps, message, subLine);
-// };
+//
+// // === VONSAI MACROS = vo__
+//
 
-// "Raw" log macros
+//-----------------------------------------------
+
+// Logging w/o format
 #define vo__info(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
 #define vo__warn(msg) fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
 #define vo__err(msg)  fmt::print("⛔️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
@@ -42,7 +29,9 @@ namespace vo
   vo__err(msg);        \
   abort();
 
-// "Formatable" log macros
+//-----------------------------------------------
+
+// Logging w/ format
 #define vo__infof(msg, ...) vo__info(fmt::format(msg, __VA_ARGS__))
 #define vo__warnf(msg, ...) vo__err(fmt::format(msg, __VA_ARGS__))
 #define vo__errf(msg, ...)  vo__err(fmt::format(msg, __VA_ARGS__))
@@ -50,31 +39,45 @@ namespace vo
   vo__errf(msg, __VA_ARGS__); \
   abort();
 
+//-----------------------------------------------
+
 // Evaluate critical condition
 #define vo__check(conditionCode) \
   if (!(conditionCode)) { vo__abort(#conditionCode); }
 
+//-----------------------------------------------
+
 // Custom Assert
 #define vo__assert(cond) assert(cond)
 
-//.
-//.
-//.
+//-----------------------------------------------
 
-// === VULKAN MACROS = vonk__
-//-----------------------------------------------------------------------------
+// Fmt ptr
+#define vo__ptrstr(p) fmt::format("{}", fmt::ptr(p))
 
-// ::: Validate api calls
+//-----------------------------------------------
+
+//
+// // === VULKAN MACROS = vonk__
+//
+
+//-----------------------------------------------
+
+// Validate api calls
 #define vonk__check(vulkanCode) \
   if (VkResult res = vulkanCode; res != VK_SUCCESS) { vo__abortf("{} : {}", res, #vulkanCode); }
 
-// ::: Cast shortcut
+//-----------------------------------------------
+
+// Vector C++ to C helpers
 #define vonk__castSize(v)           static_cast<uint32_t>(v)
 #define vonk__getSize(v)            vonk__castSize(v.size())
 #define vonk__getData(v)            v.data()
 #define vonk__getDataAs(newType, v) reinterpret_cast<newType>(vonk__getData(v))
 
-// ::: Get instance functions
+//-----------------------------------------------
+
+// Get instance functions
 #define vonk__instanceFn(instance, extName, ...)                                  \
   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
     fn(instance, __VA_ARGS__);                                                    \
@@ -82,4 +85,4 @@ namespace vo
     vo__errf("Function {} is not available", #extName);                           \
   }
 
-}  // namespace vo
+//-----------------------------------------------
