@@ -49,23 +49,6 @@ namespace others
 
   //-----------------------------------------------
 
-  std::vector<char const *> getInstanceExtensions(
-    std::vector<const char *> const &instanceExts,
-    std::vector<const char *> const &validationLayers)
-  {
-    std::vector<const char *> exts = vonk::window::getRequiredInstanceExtensions();
-
-    if (!validationLayers.empty()) { exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
-
-    if (!instanceExts.empty()) {
-      for (auto &&ext : instanceExts) { exts.emplace_back(ext); }
-    }
-
-    return exts;
-  }
-
-  //-----------------------------------------------
-
   bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts)
   {
     if (exts.empty()) return true;
@@ -454,7 +437,7 @@ namespace shaders
 
 #define VONK_SHADER_CACHE 0
 
-  ShaderData create(VkDevice logicalDevice, std::string const &name, VkShaderStageFlagBits stage)
+  ShaderData create(VkDevice device, std::string const &name, VkShaderStageFlagBits stage)
   {
     std::string const path = getPath(name.c_str(), stage);
 
@@ -479,7 +462,7 @@ namespace shaders
       .pCode    = vonk__getDataAs(const uint32_t *, code),
     };
     VkShaderModule shadermodule;
-    vonk__check(vkCreateShaderModule(logicalDevice, &shadermoduleCI, nullptr, &shadermodule));
+    vonk__check(vkCreateShaderModule(device, &shadermoduleCI, nullptr, &shadermodule));
 
     VkPipelineShaderStageCreateInfo const shaderStageCI {
       .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

@@ -91,7 +91,7 @@ VkExtent2D getFramebufferSize()
 
 //-----------------------------------------------
 
-std::vector<char const *> getRequiredInstanceExtensions()
+std::vector<char const *> getInstanceExts()
 {
   uint32_t     glfwExtensionCount = 0;
   char const **glfwExtensions     = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);

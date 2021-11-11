@@ -1,22 +1,95 @@
 #pragma once
 #include "VonkTypes.h"
+#include "VonkToStr.h"
 #include "_vulkan.h"
 
 #include "Macros.h"
+#include "Utils.h"
 #include <unordered_map>
 #include <vector>
 
-namespace vonk::create
+#include <algorithm>
+
+namespace vonk
 {  //
 
 //-----------------------------------------------
 
-inline VkInstance instance(
-  const char *                     title,
-  std::vector<const char *> const &instanceExtensions,
-  std::vector<const char *> const &validationLayers,
-  uint32_t                         apiVersion = VK_API_VERSION_1_2)
+//
+// // === DEBUGGER : @DANI : Move to .cpp
+//
+
+//-----------------------------------------------
+
+static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
+  VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+  VkDebugUtilsMessageTypeFlagsEXT             messageType,
+  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+  MBU void *                                  pUserData)
 {
+  static std::unordered_map<int32_t, bool> CACHE {};
+  auto const                               ID = pCallbackData->messageIdNumber;
+
+  if (!CACHE[ID] && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+    fmt::print(
+      "\n ❗️ [VALIDATION LAYERS] - {} at {}{}"
+      "\n--------------------------------------------------------------------------------\n{}\n",
+      vonk::ToStr_DebugSeverity.at(messageSeverity),
+      vonk::ToStr_DebugType.at(messageType),
+      pUserData ? fmt::format("- {}", pUserData) : std::string { "" },
+      pCallbackData->pMessage);
+
+    CACHE[ID] = true;
+  }
+
+  return VK_FALSE;
+}
+
+//-----------------------------------------------
+
+static inline VkDebugUtilsMessengerCreateInfoEXT sDebugMessengerCI {
+  .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+
+  .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT    //
+                     | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT  //
+                     | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+
+  .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT       //
+                 | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  //
+                 | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+
+  .pfnUserCallback = sDebugMessengerCallback,
+
+  .pUserData = nullptr,  // Optional
+  .pNext     = nullptr,  // Mandatory
+  .flags     = 0,        // Mandatory
+};
+
+//-----------------------------------------------
+
+//
+// // === INSTANCE
+//
+
+//-----------------------------------------------
+
+inline Instance_t createInstance(const char *title = "VONK", uint32_t apiVersion = VK_API_VERSION_1_2)
+{
+  Instance_t instance;
+
+  // . Info
+  // .. Of: Extensions
+
+  if (!instance.layers.empty()) { instance.exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
+
+  if (auto const windowExts = vonk::window::getInstanceExts(); !windowExts.empty()) {
+    // std::merge(instance.exts.begin(), instance.exts.end(), windowExts.begin(), windowExts.end(),
+    // instance.exts.end());
+    instance.exts.insert(instance.exts.end(), windowExts.begin(), windowExts.end());
+    // for (auto &&ext : windowExts) { instance.exts.emplace_back(ext); }
+  }
+
+  // .. Of: App
   VkApplicationInfo const appInfo {
     .sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO,
     .pApplicationName   = title,
@@ -25,35 +98,164 @@ inline VkInstance instance(
     .engineVersion      = apiVersion,
     .apiVersion         = apiVersion,
   };
-
-  auto const realInstanceExtensions = vonk::others::getInstanceExtensions(instanceExtensions, validationLayers);
-
+  // .. Of: Instance
   VkInstanceCreateInfo const instanceCI {
     .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
     .pApplicationInfo = &appInfo,
-    // Esential extensions
-    .enabledExtensionCount   = static_cast<uint32_t>(realInstanceExtensions.size()),
-    .ppEnabledExtensionNames = realInstanceExtensions.data(),
+    // Extensions
+    .enabledExtensionCount   = vonk__getSize(instance.exts),
+    .ppEnabledExtensionNames = vonk__getData(instance.exts),
     // Layers
-    .enabledLayerCount   = static_cast<uint32_t>(validationLayers.size()),
-    .ppEnabledLayerNames = validationLayers.data(),
+    .enabledLayerCount   = vonk__getSize(instance.layers),
+    .ppEnabledLayerNames = vonk__getData(instance.layers),
   };
 
-  VkInstance instance;
-  vonk__check(vkCreateInstance(&instanceCI, nullptr, &instance));
+  //. Create
+  //  .. Instance
+  vonk__check(vkCreateInstance(&instanceCI, nullptr, &instance.handle));
+  //  .. Surface
+  instance.surface = vonk::window::createSurface(instance.handle);
+  //  .. Debugger
+  if (!instance.layers.empty()) {
+    vonk__instanceFn(instance.handle, vkCreateDebugUtilsMessengerEXT, &sDebugMessengerCI, nullptr, &instance.debugger);
+  }
 
   return instance;
 }
 
 //-----------------------------------------------
 
-// inline VkDevice device(){
+inline void destroyInstance(Instance_t &instance)
+{
+  if (!instance.layers.empty()) {
+    vonk__instanceFn(instance.handle, vkDestroyDebugUtilsMessengerEXT, instance.debugger, nullptr);
+  }
+  vkDestroySurfaceKHR(instance.handle, instance.surface, nullptr);
+  vkDestroyInstance(instance.handle, nullptr);
+}
+//-----------------------------------------------
 
-// }
+//
+// // === GPU (PHYSICAL DEVICE)
+//
 
 //-----------------------------------------------
 
-inline VkRenderPass renderpass(VkDevice device, RenderPassData_t const &rpd)
+inline Gpu_t pickGpu(Instance_t &instance, std::vector<const char *> const &deviceExts)
+{
+  uint32_t gpuCount = 0;
+  vkEnumeratePhysicalDevices(instance.handle, &gpuCount, nullptr);
+  std::vector<VkPhysicalDevice> gpus(gpuCount);
+  vkEnumeratePhysicalDevices(instance.handle, &gpuCount, gpus.data());
+
+  Gpu_t    gpu;
+  uint32_t maxScore = 0;
+
+  for (const auto &pd : gpus) {
+    Gpu_t currGpu;
+
+    currGpu.handle = pd;
+    vkGetPhysicalDeviceFeatures(pd, &currGpu.features);
+    vkGetPhysicalDeviceProperties(pd, &currGpu.properties);
+    vkGetPhysicalDeviceMemoryProperties(pd, &currGpu.memory);
+
+    auto const queueIndicesOpt        = vonk::queue::findIndices(pd, instance.surface);
+    bool const queueIndicesIsComplete = vonk::queue::isComplete(queueIndicesOpt);
+    if (queueIndicesIsComplete) { currGpu.queuesIndices = vonk::queue::unrollOptionals(queueIndicesOpt); }
+
+    if (
+      !queueIndicesIsComplete                                         //
+      or vonk::swapchain::isEmpty(pd, instance.surface)               //
+      or !vonk::others::checkDeviceExtensionsSupport(pd, deviceExts)  //
+    ) {
+      return currGpu;
+    }
+
+    uint32_t const isDiscreteGPU = (currGpu.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+    currGpu.score                = (1000 * isDiscreteGPU) + currGpu.properties.limits.maxImageDimension2D;
+
+    if (currGpu.score > maxScore) {
+      gpu      = currGpu;
+      maxScore = currGpu.score;
+    }
+  }
+
+  if (maxScore < 1) { vo__abort("Suitable GPU not found!"); }
+  // vo__infof("QUEUE INDICES -> g:{} p:{}", currGpu.queuesIndices.graphics, currGpu.queuesIndices.present);
+  return gpu;
+}
+
+//-----------------------------------------------
+
+//
+// // === DEVICE
+//
+
+//-----------------------------------------------
+
+inline Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
+{
+  Device_t device;
+
+  // . Queues' Create Infos
+  float const                          queuePriority = 1.0f;
+  std::vector<VkDeviceQueueCreateInfo> queueCIs;
+  // NOTE: If graphics, compute or present queues comes from the same family register it only once
+  for (uint32_t queueFamily : vonk::queue::getUniqueIndices(gpu.queuesIndices)) {
+    queueCIs.push_back(VkDeviceQueueCreateInfo {
+      .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+      .queueFamilyIndex = queueFamily,
+      .queueCount       = 1,
+      .pQueuePriorities = &queuePriority,
+    });
+  }
+
+  // . Device's Create Info
+  VkDeviceCreateInfo const deviceCI {
+    .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    .pEnabledFeatures        = &gpu.features,
+    .queueCreateInfoCount    = vonk__getSize(queueCIs),
+    .pQueueCreateInfos       = vonk__getData(queueCIs),
+    .enabledExtensionCount   = vonk__getSize(device.exts),
+    .ppEnabledExtensionNames = vonk__getData(device.exts),
+    .enabledLayerCount       = vonk__getSize(instance.layers),
+    .ppEnabledLayerNames     = vonk__getData(instance.layers),
+  };
+
+  // . Create Device !
+  vonk__check(vkCreateDevice(gpu.handle, &deviceCI, nullptr, &device.handle));
+
+  // . Pick required queues
+  device.queues        = vonk::queue::findQueues(device.handle, gpu.queuesIndices);
+  device.queuesIndices = gpu.queuesIndices;  // @DANI : Really needed?
+
+  // . Command Pool :  Maybe move this out and create one per thread
+  VkCommandPoolCreateInfo const commandPoolCI {
+    .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .queueFamilyIndex = device.queuesIndices.graphics,
+  };
+  vonk__check(vkCreateCommandPool(device.handle, &commandPoolCI, nullptr, &device.commandPool));
+
+  return device;
+}
+
+//-----------------------------------------------
+
+inline void destroyDevice(Device_t const &device)
+{
+  vkDestroyCommandPool(device.handle, device.commandPool, nullptr);
+  vkDestroyDevice(device.handle, nullptr);
+}
+
+//-----------------------------------------------
+
+//
+// // === RENDER PASS
+//
+
+//-----------------------------------------------
+
+inline VkRenderPass createRenderPass(VkDevice device, RenderPassData_t const &rpd)
 {
   VkRenderPassCreateInfo const renderpassCI {
     .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -72,7 +274,93 @@ inline VkRenderPass renderpass(VkDevice device, RenderPassData_t const &rpd)
 
 //-----------------------------------------------
 
-inline Texture_t texture(
+inline VkRenderPass createDefaultRenderPass(VkDevice device, VkFormat colorFormat, VkFormat depthFormat)
+{
+  RenderPassData_t rpd;
+  rpd.attachments = {
+    {
+      .format         = colorFormat,
+      .samples        = VK_SAMPLE_COUNT_1_BIT,
+      .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+      .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    },
+    {
+      .format         = depthFormat,
+      .samples        = VK_SAMPLE_COUNT_1_BIT,
+      .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
+      .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    },
+  };
+  rpd.attachmentRefs = {
+    {
+      // color
+      .attachment = 0,
+      .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    },
+    {
+      // depth
+      .attachment = 1,
+      .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    },
+  };
+  rpd.subpassDescs = {
+    {
+      .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+      .colorAttachmentCount    = 1,
+      .pColorAttachments       = &rpd.attachmentRefs[0],
+      .pDepthStencilAttachment = &rpd.attachmentRefs[1],
+      .inputAttachmentCount    = 0,
+      .pInputAttachments       = nullptr,
+      .preserveAttachmentCount = 0,
+      .pPreserveAttachments    = nullptr,
+      .pResolveAttachments     = nullptr,
+    },
+  };
+  // @DANI : research more about the implications of this
+  rpd.subpassDeps = {
+    // 0
+    {
+      .srcSubpass      = VK_SUBPASS_EXTERNAL,
+      .dstSubpass      = 0,
+      .srcStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .srcAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
+      .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+
+    },
+    // 1
+    {
+      .srcSubpass      = 0,
+      .dstSubpass      = VK_SUBPASS_EXTERNAL,
+      .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+      .dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
+      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+    },
+  };
+
+  return vonk::createRenderPass(device, rpd);
+}
+
+//-----------------------------------------------
+
+//
+// // === TEXTURE
+//
+
+//-----------------------------------------------
+
+inline Texture_t createTexture(
   VkDevice                                device,
   VkPhysicalDeviceMemoryProperties const &memProps,
   VkExtent2D const &                      extent2D,
@@ -126,6 +414,232 @@ inline Texture_t texture(
 
   return tex;
 }
+
+//-----------------------------------------------
+
+inline void destroyTexture(VkDevice device, Texture_t const &tex)
+{
+  vkDestroyImageView(device, tex.view, nullptr);
+  vkFreeMemory(device, tex.memory, nullptr);
+  vkDestroyImage(device, tex.image, nullptr);
+}
+
+//-----------------------------------------------
+
+inline bool isEmptyTexture(Texture_t const &tex) { return !tex.view or !tex.memory or !tex.image; }
+
+//-----------------------------------------------
+
+//
+// // === SEMAPHORES
+//
+
+//-----------------------------------------------
+
+inline VkSemaphore createSemaphore(VkDevice device)
+{
+  static VkSemaphoreCreateInfo const semaphoreCI {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+  };
+
+  VkSemaphore semaphore;
+  vonk__check(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
+  return semaphore;
+}
+
+//-----------------------------------------------
+
+//-----------------------------------------------
+
+//
+// // === FENCES
+//
+
+//-----------------------------------------------
+
+inline VkFence createFence(VkDevice device)
+{
+  static VkFenceCreateInfo const fenceCI {
+    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    .flags = VK_FENCE_CREATE_SIGNALED_BIT,  // Initialize on creation to avoid 'freezes'
+  };
+
+  VkFence fence;
+  vonk__check(vkCreateFence(device, &fenceCI, nullptr, &fence));
+  return fence;
+}
+
+//-----------------------------------------------
+
+//-----------------------------------------------
+
+//
+// // === SWAP CHAIN
+//
+
+//-----------------------------------------------
+
+inline void destroySwapChain(Device_t const &device, SwapChain_t const &swapchain, bool justForRecreation = false)
+{
+  // . Defaults : DepthTexture, FrameBuffers, ImageViews
+  vonk::destroyTexture(device.handle, swapchain.defaultDepthTexture);
+  for (auto framebuffer : swapchain.defaultFrameBuffers) { vkDestroyFramebuffer(device.handle, framebuffer, nullptr); }
+  for (auto imageView : swapchain.views) { vkDestroyImageView(device.handle, imageView, nullptr); }
+
+  // . Just For Recreation 'Barrier'
+  if (justForRecreation) return;
+
+  // . Default renderpass
+  vkDestroyRenderPass(device.handle, swapchain.defaultRenderPass, nullptr);
+
+  // . SwapChain
+  vkDestroySwapchainKHR(device.handle, swapchain.handle, nullptr);
+
+  // . Sync objects
+  for (size_t i = 0; i < swapchain.sInFlightMaxFrames; i++) {
+    vkDestroySemaphore(device.handle, swapchain.semaphores.render[i], nullptr);
+    vkDestroySemaphore(device.handle, swapchain.semaphores.present[i], nullptr);
+    vkDestroyFence(device.handle, swapchain.fences.submit[i], nullptr);
+  }
+}
+
+//-----------------------------------------------
+
+inline SwapChain_t
+  createSwapChain(Instance_t const &instance, Gpu_t const &gpu, Device_t const &device, SwapChain_t oldSwapChain)
+{
+  VkSwapchainKHR oldSwapChainHandle = oldSwapChain.handle;
+  SwapChain_t    swapchain          = std::move(oldSwapChain);
+
+  bool const        gpDiffQueue = device.queues.graphics != device.queues.present;
+  std::vector const gpIndices   = { device.queuesIndices.graphics, device.queuesIndices.present };
+
+  // . Get supported settings
+  swapchain.settings = vonk::swapchain::getSettings(
+    gpu.handle,
+    instance.surface,
+    SwapShainSettings_t { true, vonk::window::getFramebufferSize() });
+  auto const &st = swapchain.settings;
+
+  // . Create SwapChain
+  VkSwapchainCreateInfoKHR const swapchainCI {
+    .sType   = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .surface = instance.surface,
+    .clipped = VK_TRUE,  // -> TRUE: Don't care about obscured pixels
+
+    .presentMode    = st.presentMode,
+    .preTransform   = st.preTransformFlag,    // -> i.e. Globally flips 90 degrees
+    .compositeAlpha = st.compositeAlphaFlag,  // -> Blending with other windows, Opaque = None/Ignore
+
+    .imageArrayLayers = 1,  // -> Always 1 unless you are developing a stereoscopic 3D application.
+    .minImageCount    = st.minImageCount,
+    .imageExtent      = st.extent2D,
+    .imageFormat      = st.colorFormat,
+    .imageColorSpace  = st.colorSpace,
+    .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | st.extraImageUsageFlags,
+
+    .imageSharingMode      = gpDiffQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = gpDiffQueue ? vonk__getSize(gpIndices) : 0,
+    .pQueueFamilyIndices   = gpDiffQueue ? vonk__getData(gpIndices) : nullptr,
+
+    .oldSwapchain = swapchain.handle  // -> Ensure that we can still present already acquired images
+  };
+  vonk__check(vkCreateSwapchainKHR(device.handle, &swapchainCI, nullptr, &swapchain.handle));
+
+  // . Get SwapChain Images
+  uint32_t imageCount;
+  vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &imageCount, nullptr);
+  swapchain.images.resize(imageCount);
+  vkGetSwapchainImagesKHR(device.handle, swapchain.handle, &imageCount, swapchain.images.data());
+
+  // . If an existing swap chain is re-created, destroy the old image-views
+  //    [and swap-chain : This also cleans up all the presentable images ¿?¿?¿?]
+  if (oldSwapChainHandle != VK_NULL_HANDLE) { destroySwapChain(device, swapchain, true); }
+
+  // . Get Image-Views for that Images
+  swapchain.views.resize(swapchain.images.size());
+  for (size_t i = 0; i < swapchain.images.size(); i++) {
+    VkImageViewCreateInfo const imageViewCI {
+      .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image    = swapchain.images[i],
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format   = st.colorFormat,
+      // How to read RGBA
+      .components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A },
+      // The subresourceRange field describes what the image's purpose is and which part to be accessed.
+      .subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+      .subresourceRange.baseMipLevel   = 0,  // -> MIP-MAPing the texture [??]
+      .subresourceRange.levelCount     = 1,
+      .subresourceRange.baseArrayLayer = 0,
+      .subresourceRange.layerCount     = 1,
+    };
+    vonk__check(vkCreateImageView(device.handle, &imageViewCI, nullptr, &swapchain.views[i]));
+  }
+
+  // . Setup default render-pass if needed
+  if (!swapchain.defaultRenderPass) {
+    swapchain.defaultRenderPass = createDefaultRenderPass(device.handle, st.colorFormat, st.depthFormat);
+  }
+
+  // . Setup default framebuffers' depth-stencil if needed
+  swapchain.defaultDepthTexture = vonk::createTexture(
+    device.handle,
+    gpu.memory,
+    st.extent2D,
+    st.depthFormat,
+    VK_SAMPLE_COUNT_1_BIT,
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    VK_IMAGE_ASPECT_DEPTH_BIT);
+
+  // . Setup default framebuffers
+  VkImageView attachments[2];
+  attachments[1]                              = swapchain.defaultDepthTexture.view;  // Depth
+  VkFramebufferCreateInfo const frameBufferCI = {
+    .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+    .pNext           = NULL,
+    .renderPass      = swapchain.defaultRenderPass,
+    .attachmentCount = 2,
+    .pAttachments    = attachments,
+    .width           = st.extent2D.width,
+    .height          = st.extent2D.height,
+    .layers          = 1,
+  };
+  swapchain.defaultFrameBuffers.resize(st.minImageCount);
+  for (uint32_t i = 0; i < swapchain.defaultFrameBuffers.size(); ++i) {
+    attachments[0] = swapchain.views[i];  // Color : 'Links' with the image-views of the swap-chain
+    vonk__check(vkCreateFramebuffer(device.handle, &frameBufferCI, nullptr, &swapchain.defaultFrameBuffers[i]));
+  }
+
+  // . Setup sync objects
+  swapchain.fences.acquire.resize(swapchain.images.size(), VK_NULL_HANDLE);
+
+  if (!oldSwapChainHandle) {
+    swapchain.semaphores.render.resize(swapchain.sInFlightMaxFrames);
+    swapchain.semaphores.present.resize(swapchain.sInFlightMaxFrames);
+    swapchain.fences.submit.resize(swapchain.sInFlightMaxFrames);
+
+    for (size_t i = 0; i < swapchain.sInFlightMaxFrames; ++i) {
+      swapchain.semaphores.render[i]  = createSemaphore(device.handle);
+      swapchain.semaphores.present[i] = createSemaphore(device.handle);
+      swapchain.fences.submit[i]      = createFence(device.handle);
+    }
+  }
+
+  return swapchain;
+}
+
+//-----------------------------------------------
+
+}  // namespace vonk
+
+namespace vonk::create
+{  //
+
+//-----------------------------------------------
+
+//-----------------------------------------------
+
+//-----------------------------------------------
 
 //-----------------------------------------------
 

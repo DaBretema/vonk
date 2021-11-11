@@ -44,9 +44,12 @@ struct SwapShainSettings_t
 
 struct Instance_t
 {
-  VkInstance               handle = VK_NULL_HANDLE;
-  VkDebugUtilsMessengerEXT debugger;
-  VkSurfaceKHR             surface;
+  VkInstance               handle   = VK_NULL_HANDLE;
+  VkDebugUtilsMessengerEXT debugger = VK_NULL_HANDLE;
+  VkSurfaceKHR             surface  = VK_NULL_HANDLE;
+
+  std::vector<const char *> layers = { "VK_LAYER_KHRONOS_validation" };
+  std::vector<const char *> exts   = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
 };
 
 //-----------------------------------------------
@@ -59,6 +62,8 @@ struct Gpu_t
   VkPhysicalDeviceFeatures         features;
   VkPhysicalDeviceProperties       properties;
   QueueIndices_t                   queuesIndices;
+
+  Instance_t *pInstance;
 };
 
 //-----------------------------------------------
@@ -71,6 +76,19 @@ struct Device_t
   QueueIndices_t queuesIndices;
 
   VkCommandPool commandPool = VK_NULL_HANDLE;
+
+  std::vector<const char *> exts = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+  Gpu_t *pGpu;
+};
+
+//-----------------------------------------------
+
+struct Texture_t
+{
+  VkImageView    view   = VK_NULL_HANDLE;
+  VkImage        image  = VK_NULL_HANDLE;
+  VkDeviceMemory memory = VK_NULL_HANDLE;
 };
 
 //-----------------------------------------------
@@ -81,17 +99,19 @@ struct SwapChain_t
   SwapShainSettings_t      settings;
   std::vector<VkImage>     images;
   std::vector<VkImageView> views;
-};
 
-//-----------------------------------------------
+  std::vector<VkFramebuffer> defaultFrameBuffers;
+  Texture_t                  defaultDepthTexture;
+  VkRenderPass               defaultRenderPass = VK_NULL_HANDLE;
 
-struct SyncBase_t
-{
+  static constexpr uint32_t sInFlightMaxFrames = 3;
+
   struct
   {
     std::vector<VkSemaphore> render;
     std::vector<VkSemaphore> present;
   } semaphores;
+
   struct
   {
     std::vector<VkFence> acquire;
@@ -101,14 +121,24 @@ struct SyncBase_t
 
 //-----------------------------------------------
 
-// struct FixedFuncs_t
+// struct SyncBase_t
 // {
-//   VkPipelineRasterizationStateCreateInfo           rasterizationStateCI;
-//   VkPipelineMultisampleStateCreateInfo             multisamplingCI;
-//   VkPipelineDepthStencilStateCreateInfo            depthstencilCI;
-//   std::vector<VkPipelineColorBlendAttachmentState> blendingPerAttachment;
-//   VkPipelineColorBlendStateCreateInfo              blendingCI;
+//   struct
+//   {
+//     std::vector<VkSemaphore> render;
+//     std::vector<VkSemaphore> present;
+//   } semaphores;
+//   struct
+//   {
+//     std::vector<VkFence> acquire;
+//     std::vector<VkFence> submit;
+//   } fences;
 // };
+
+//-----------------------------------------------
+
+uint32_t constexpr VONK_COLOR_COMPONENT_RGBA_BIT =
+  VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
 namespace BlendType
 {
@@ -120,8 +150,7 @@ namespace BlendType
     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
     .alphaBlendOp        = VK_BLEND_OP_ADD,
-    .colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    .colorWriteMask      = VONK_COLOR_COMPONENT_RGBA_BIT,
   };
   VkPipelineColorBlendAttachmentState const Additive = {
     .blendEnable         = VK_TRUE,
@@ -131,8 +160,7 @@ namespace BlendType
     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
     .alphaBlendOp        = VK_BLEND_OP_ADD,
-    .colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    .colorWriteMask      = VONK_COLOR_COMPONENT_RGBA_BIT,
   };
   VkPipelineColorBlendAttachmentState const StraightAlpha = {
     .blendEnable         = VK_FALSE,
@@ -142,8 +170,7 @@ namespace BlendType
     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
     .alphaBlendOp        = VK_BLEND_OP_ADD,
-    .colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    .colorWriteMask      = VONK_COLOR_COMPONENT_RGBA_BIT,
   };
   VkPipelineColorBlendAttachmentState const StraightColor = {
     .blendEnable         = VK_FALSE,
@@ -153,8 +180,7 @@ namespace BlendType
     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
     .alphaBlendOp        = VK_BLEND_OP_ADD,
-    .colorWriteMask =
-      VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+    .colorWriteMask      = VONK_COLOR_COMPONENT_RGBA_BIT,
   };
 }  // namespace BlendType
 
@@ -170,18 +196,9 @@ struct RenderPassData_t
 
 //-----------------------------------------------
 
-struct Texture_t
-{
-  VkImageView    view;
-  VkImage        image;
-  VkDeviceMemory memory;
-};
-
-//-----------------------------------------------
-
 struct FrameBuffer_t
 {
-  VkFramebuffer          framebuffer;
+  VkFramebuffer          framebuffer = VK_NULL_HANDLE;
   std::vector<Texture_t> attachments;
   // VkDescriptorImageInfo                descriptor;
 };
@@ -263,11 +280,11 @@ struct PipelineData_t
 
 struct Pipeline_t
 {
-  VkPipeline handle;
+  VkPipeline handle = VK_NULL_HANDLE;
   // . Static
-  VkPipelineLayout                                layout;
+  VkPipelineLayout                                layout = VK_NULL_HANDLE;
   std::vector<VkPipelineShaderStageCreateInfo>    stagesCI;
-  VkRenderPass                                    renderpass;
+  VkRenderPass                                    renderpass = VK_NULL_HANDLE;
   std::unordered_map<std::string, VkShaderModule> shaderModules;
   // . Dynamic
   std::vector<VkFramebuffer>   frameBuffers;

@@ -6,36 +6,6 @@
 namespace vonk
 {  //
 
-//-----------------------------------------------
-
-// @DANI move this to 'VonkUtils' also rename it to 'VonkTools'
-Gpu_t getGpuDataAndScore(VkPhysicalDevice pd, VkSurfaceKHR surface, std::vector<const char *> const &deviceExts)
-{
-  Gpu_t gpu;
-  gpu.handle = pd;
-  vkGetPhysicalDeviceFeatures(pd, &gpu.features);
-  vkGetPhysicalDeviceProperties(pd, &gpu.properties);
-  vkGetPhysicalDeviceMemoryProperties(pd, &gpu.memory);
-
-  auto const queueIndicesOpt        = vonk::queue::findIndices(pd, surface);
-  bool const queueIndicesIsComplete = vonk::queue::isComplete(queueIndicesOpt);
-  if (queueIndicesIsComplete) { gpu.queuesIndices = vonk::queue::unrollOptionals(queueIndicesOpt); }
-
-  if (
-    !queueIndicesIsComplete                                         //
-    or vonk::swapchain::isEmpty(pd, surface)                        //
-    or !vonk::others::checkDeviceExtensionsSupport(pd, deviceExts)  //
-    // or !gpu.features.geometryShader                                           //
-  ) {
-    return gpu;
-  }
-
-  uint32_t const isDiscreteGPU = (gpu.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-  gpu.score                    = (1000 * isDiscreteGPU) + gpu.properties.limits.maxImageDimension2D;
-
-  return gpu;
-};
-
 //----------------------------------------------- !!
 
 void Base::addPipeline(PipelineData_t const &ci)
@@ -46,8 +16,8 @@ void Base::addPipeline(PipelineData_t const &ci)
     mSwapChain,
     mDevice.handle,
     mDevice.commandPool,
-    mDefaultRenderPass,
-    mDefaultFrameBuffers));
+    mSwapChain.defaultRenderPass,
+    mSwapChain.defaultFrameBuffers));
 };
 
 //-----------------------------------------------
@@ -63,7 +33,7 @@ void Base::drawFrame()
   //=====
   //=====   PRECONDITIONS
 
-  vkWaitForFences(mDevice.handle, 1, &mSync.fences.submit[currFrame], VK_TRUE, UINT64_MAX);
+  vkWaitForFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame], VK_TRUE, UINT64_MAX);
 
   //=====
   //=====   1. GET NEXT IMAGE TO PROCESS
@@ -74,32 +44,32 @@ void Base::drawFrame()
     mDevice.handle,
     mSwapChain.handle,
     UINT64_MAX,
-    mSync.semaphores.present[currFrame],
+    mSwapChain.semaphores.present[currFrame],
     VK_NULL_HANDLE,
     &imageIndex);
 
   // (1.2) Validate the swapchain state
   if (acquireRet == VK_ERROR_OUT_OF_DATE_KHR) {
-    swapchainReCreate();
+    recreateSwapChain();
     return;
   } else if (acquireRet != VK_SUCCESS && acquireRet != VK_SUBOPTIMAL_KHR) {
     vo__err("Failed to acquire swap chain image!");
   }
 
   // (1.3) Check if a previous frame is using this image (i.e. there is its fence to wait on)
-  if (mSync.fences.acquire[imageIndex] != VK_NULL_HANDLE) {
-    vkWaitForFences(mDevice.handle, 1, &mSync.fences.acquire[imageIndex], VK_TRUE, UINT64_MAX);
+  if (mSwapChain.fences.acquire[imageIndex] != VK_NULL_HANDLE) {
+    vkWaitForFences(mDevice.handle, 1, &mSwapChain.fences.acquire[imageIndex], VK_TRUE, UINT64_MAX);
   }
   // (1.4) Mark the image as now being in use by this frame
-  mSync.fences.acquire[imageIndex] = mSync.fences.submit[currFrame];
+  mSwapChain.fences.acquire[imageIndex] = mSwapChain.fences.submit[currFrame];
 
   //=====
   //=====   2. DRAW : Graphics Queue
 
   // (2.1) Sync objects
   VkPipelineStageFlags const waitStages[]       = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-  VkSemaphore const          waitSemaphores[]   = { mSync.semaphores.present[currFrame] };
-  VkSemaphore const          signalSemaphores[] = { mSync.semaphores.render[currFrame] };
+  VkSemaphore const          waitSemaphores[]   = { mSwapChain.semaphores.present[currFrame] };
+  VkSemaphore const          signalSemaphores[] = { mSwapChain.semaphores.render[currFrame] };
 
   // (2.2) Submit info
   VkSubmitInfo const submitInfo {
@@ -114,8 +84,8 @@ void Base::drawFrame()
   };
 
   // (2.3) Reset fences right before asking for draw
-  vkResetFences(mDevice.handle, 1, &mSync.fences.submit[currFrame]);
-  vonk__check(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSync.fences.submit[currFrame]));
+  vkResetFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame]);
+  vonk__check(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
 
   //=====
   //=====   3. DUMP TO SCREEN : Present Queue
@@ -138,7 +108,7 @@ void Base::drawFrame()
   // (3.3) Validate swapchain state
   if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vonk::window::framebufferResized) {
     vonk::window::framebufferResized = false;  // move this variable to vonk::Base
-    swapchainReCreate();
+    recreateSwapChain();
   } else if (presentRet != VK_SUCCESS) {
     vo__err("Failed to present swap chain image!");
   }
@@ -154,201 +124,20 @@ void Base::drawFrame()
 void Base::init()
 {
   //=====
-  //=====   SETTINGS
+  //=====   SETTINGS ¿?¿?¿?¿?¿?¿
 
-  if (!vonk::others::checkValidationLayersSupport(sValidationLayers)) {
+  if (!vonk::others::checkValidationLayersSupport(mInstance.layers)) {
     vo__abort("Validation layers requested, but not available!");
   }
 
-  //=====
-  //=====   CREATE INSTANCE
-  mInstance.handle =
-    vonk::create::instance(vonk::window::title.c_str(), sInstanceExtensions, sValidationLayers, VK_API_VERSION_1_2);
-
-  //=====
-  //=====   CREATE DEBUG MESSENGER
-
-  vonk::debugmessenger::create(mInstance.handle, mInstance.debugger, sValidationLayers);
-
-  //=====
-  //=====   CREATE SURFACE  (@DANI: Check for headless Vulkan in a future)
-
-  mInstance.surface = vonk::window::createSurface(mInstance.handle);
-
-  //=====
-  //=====   PICK GPU (PHYSICAL DEVICE)
-
-  uint32_t gpuCount = 0;
-  vkEnumeratePhysicalDevices(mInstance.handle, &gpuCount, nullptr);
-  std::vector<VkPhysicalDevice> gpus(gpuCount);
-  vkEnumeratePhysicalDevices(mInstance.handle, &gpuCount, gpus.data());
-
-  uint32_t maxScore = 0;
-  for (const auto &pd : gpus) {
-    auto const gpu = getGpuDataAndScore(pd, mInstance.surface, sDeviceExtensions);
-    if (gpu.score > maxScore) {
-      mGpu     = gpu;
-      maxScore = gpu.score;
-    }
-  }
-  if (maxScore < 1) { vo__abort("Suitable GPU not found!"); }
-
-  //=====
-  //=====   CAPTURE DATA : Related with GPU and SURFACE
-
-  mSwapChain.settings = vonk::swapchain::getSettings(
-    mGpu.handle,
-    mInstance.surface,
-    SwapShainSettings_t { true, vonk::window::getFramebufferSize() });
-
-  //=====
-  //=====   CREATE DEVICE  (GPU MANAGER / LOGICAL DEVICE)
-
-  // . Queues' Create Infos
-  // NOTE: If graphics, compute or present queues comes from the same family register it only once
-  float const                          queuePriority = 1.0f;
-  std::vector<VkDeviceQueueCreateInfo> queueCIs;
-  for (uint32_t queueFamily : vonk::queue::getUniqueIndices(mGpu.queuesIndices)) {
-    queueCIs.push_back(VkDeviceQueueCreateInfo {
-      .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-      .queueFamilyIndex = queueFamily,
-      .queueCount       = 1,
-      .pQueuePriorities = &queuePriority,
-    });
-  }
-  // . Device's Create Info
-  VkDeviceCreateInfo const deviceCI {
-    .sType            = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-    .pEnabledFeatures = &mGpu.features,
-    // Queues info
-    .queueCreateInfoCount = vonk__getSize(queueCIs),
-    .pQueueCreateInfos    = vonk__getData(queueCIs),
-    // Set device extensions
-    .enabledExtensionCount   = vonk__getSize(sDeviceExtensions),
-    .ppEnabledExtensionNames = vonk__getData(sDeviceExtensions),
-    // Set device validation layers
-    .enabledLayerCount   = vonk__getSize(sValidationLayers),
-    .ppEnabledLayerNames = vonk__getData(sValidationLayers),
-  };
-  // . Create Device !
-  vonk__check(vkCreateDevice(mGpu.handle, &deviceCI, nullptr, &mDevice.handle));
-
-  // . Pick required queues
-  mDevice.queues        = vonk::queue::findQueues(mDevice.handle, mGpu.queuesIndices);
-  mDevice.queuesIndices = mGpu.queuesIndices;
-
-  //=====
-  //=====   COMMAND POOL  :  Maybe move this out and create one per thread
-
-  VkCommandPoolCreateInfo const commandPoolCI {
-    .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .queueFamilyIndex = mDevice.queuesIndices.graphics,
-  };
-  vonk__check(vkCreateCommandPool(mDevice.handle, &commandPoolCI, nullptr, &mDevice.commandPool));
-
-  //=====
-  //=====   SYNC OBJECTS  :  Maybe this is SwapChain resposibility...
-
-  mSync.semaphores.render.resize(sInFlightMaxFrames);
-  mSync.semaphores.present.resize(sInFlightMaxFrames);
-  mSync.fences.submit.resize(sInFlightMaxFrames);
-
-  static VkSemaphoreCreateInfo const semaphoreCI {
-    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-  };
-
-  static VkFenceCreateInfo const fenceCI {
-    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-    .flags = VK_FENCE_CREATE_SIGNALED_BIT,  // Initialize on creation to avoid 'freezes'
-  };
-
-  for (size_t i = 0; i < sInFlightMaxFrames; ++i) {
-    vonk__check(vkCreateSemaphore(mDevice.handle, &semaphoreCI, nullptr, &mSync.semaphores.render[i]));
-    vonk__check(vkCreateSemaphore(mDevice.handle, &semaphoreCI, nullptr, &mSync.semaphores.present[i]));
-    vonk__check(vkCreateFence(mDevice.handle, &fenceCI, nullptr, &mSync.fences.submit[i]));
-  }
-
-  //=====
-  //=====   DEFAULT RENDERPASS
-
-  RenderPassData_t rpd;
-  rpd.attachments = {
-    {
-      .format         = mSwapChain.settings.colorFormat,
-      .samples        = VK_SAMPLE_COUNT_1_BIT,
-      .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-      .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    },
-    {
-      .format         = mSwapChain.settings.depthFormat,
-      .samples        = VK_SAMPLE_COUNT_1_BIT,
-      .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-      .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    },
-  };
-  rpd.attachmentRefs = {
-    {
-      // color
-      .attachment = 0,
-      .layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    },
-    {
-      // depth
-      .attachment = 1,
-      .layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    },
-  };
-  rpd.subpassDescs = {
-    {
-      .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
-      .colorAttachmentCount    = 1,
-      .pColorAttachments       = &rpd.attachmentRefs[0],
-      .pDepthStencilAttachment = &rpd.attachmentRefs[1],
-      .inputAttachmentCount    = 0,
-      .pInputAttachments       = nullptr,
-      .preserveAttachmentCount = 0,
-      .pPreserveAttachments    = nullptr,
-      .pResolveAttachments     = nullptr,
-    },
-  };
-  // @DANI : research more about the implications of this
-  rpd.subpassDeps = {
-    // 0
-    {
-      .srcSubpass      = VK_SUBPASS_EXTERNAL,
-      .dstSubpass      = 0,
-      .srcStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      .dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .srcAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
-      .dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-
-    },
-    // 1
-    {
-      .srcSubpass      = 0,
-      .dstSubpass      = VK_SUBPASS_EXTERNAL,
-      .srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      .srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT,
-      .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
-    },
-  };
-  mDefaultRenderPass = vonk::create::renderpass(mDevice.handle, rpd);
-
-  //=====
-  //=====   CREATE SWAPCHAIN  (DEFAULT "FBO")
-
-  swapchainCreate();
+  // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
+  mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
+  // . Pick Gpu (aka: physical device)
+  mGpu = vonk::pickGpu(mInstance, mDevice.exts);
+  // . Create Device (aka: gpu-manager / logical-device)
+  mDevice = vonk::createDevice(mInstance, mGpu);
+  // . Create SwapChain
+  mSwapChain = vonk::createSwapChain(mInstance, mGpu, mDevice, mSwapChain);
 }
 
 //-----------------------------------------------
@@ -361,173 +150,55 @@ void Base::cleanup()
   for (auto &pipeline : mPipelines) {
     vkDestroyPipeline(mDevice.handle, pipeline.handle, nullptr);
     vkDestroyPipelineLayout(mDevice.handle, pipeline.layout, nullptr);
-    if (pipeline.renderpass != mDefaultRenderPass) vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);
+    if (pipeline.renderpass != mSwapChain.defaultRenderPass)
+      vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);
 
     for (auto [name, shaderModule] : pipeline.shaderModules) {
       vkDestroyShaderModule(mDevice.handle, shaderModule, nullptr);
     }
+    // vonk::destroyPipeline(pipeline, mDefaultRenderPass);
   }
 
-  //=====
-  //=====   DEFAULTS
-
-  vkDestroyRenderPass(mDevice.handle, mDefaultRenderPass, nullptr);
-
-  //=====
-  //=====   SWAPCHAIN
-  swapchainCleanUp();
-  vkDestroySwapchainKHR(mDevice.handle, mSwapChain.handle, nullptr);
-  for (size_t i = 0; i < sInFlightMaxFrames; i++) {
-    vkDestroySemaphore(mDevice.handle, mSync.semaphores.render[i], nullptr);
-    vkDestroySemaphore(mDevice.handle, mSync.semaphores.present[i], nullptr);
-    vkDestroyFence(mDevice.handle, mSync.fences.submit[i], nullptr);
-  }
-
-  //=====
-  //=====   DEVICE
-  vkDestroyCommandPool(mDevice.handle, mDevice.commandPool, nullptr);
-  vkDestroyDevice(mDevice.handle, nullptr);
-
-  //=====
-  //=====   INSTANCE
-
-  vonk::debugmessenger::destroy(mInstance.handle, mInstance.debugger, sValidationLayers);
-  vkDestroySurfaceKHR(mInstance.handle, mInstance.surface, nullptr);
-  vkDestroyInstance(mInstance.handle, nullptr);
+  vonk::destroySwapChain(mDevice, mSwapChain, false);
+  vonk::destroyDevice(mDevice);
+  vonk::destroyInstance(mInstance);
 }
 
 //-----------------------------------------------
 //-----------------------------------------------
 //-----------------------------------------------
 
-void Base::swapchainCreate()
-{
-  // // . Get supported settings
-  // mSwapChain.settings = vonk::swapchain::getSettings(
-  //   mGpu.handle,
-  //   mInstance.surface,
-  //   SwapShainSettings_t { true, vonk::window::getFramebufferSize() });
-
-  // . Create SwapChain
-  static bool const        gpDiffQueue = mDevice.queues.graphics != mDevice.queues.present;
-  static std::vector const gpIndices   = { mDevice.queuesIndices.graphics, mDevice.queuesIndices.present };
-
-  VkSwapchainCreateInfoKHR const swapchainCI {
-    .sType   = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-    .surface = mInstance.surface,
-    .clipped = VK_TRUE,  // -> TRUE: Don't care about obscured pixels
-
-    .presentMode    = mSwapChain.settings.presentMode,
-    .preTransform   = mSwapChain.settings.preTransformFlag,    // -> i.e. Globally flips 90 degrees
-    .compositeAlpha = mSwapChain.settings.compositeAlphaFlag,  // -> Blending with other windows, Opaque = None/Ignore
-
-    .imageArrayLayers = 1,  // -> Always 1 unless you are developing a stereoscopic 3D application.
-    .minImageCount    = mSwapChain.settings.minImageCount,
-    .imageExtent      = mSwapChain.settings.extent2D,
-    .imageFormat      = mSwapChain.settings.colorFormat,
-    .imageColorSpace  = mSwapChain.settings.colorSpace,
-    .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | mSwapChain.settings.extraImageUsageFlags,
-
-    .imageSharingMode      = gpDiffQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = gpDiffQueue ? vonk__getSize(gpIndices) : 0,
-    .pQueueFamilyIndices   = gpDiffQueue ? vonk__getData(gpIndices) : nullptr,
-
-    .oldSwapchain = mSwapChain.handle  // -> Better cleanup + ensure that we can still present already acquired images
-  };
-  vonk__check(vkCreateSwapchainKHR(mDevice.handle, &swapchainCI, nullptr, &mSwapChain.handle));
-
-  // . Get SwapChain Images
-  uint32_t imageCount;
-  vkGetSwapchainImagesKHR(mDevice.handle, mSwapChain.handle, &imageCount, nullptr);
-  mSwapChain.images.resize(imageCount);
-  vkGetSwapchainImagesKHR(mDevice.handle, mSwapChain.handle, &imageCount, mSwapChain.images.data());
-
-  mSync.fences.acquire.resize(mSwapChain.images.size(), VK_NULL_HANDLE);
-
-  // . Get Image-Views for that Images
-  mSwapChain.views.resize(mSwapChain.images.size());
-  for (size_t i = 0; i < mSwapChain.images.size(); i++) {
-    VkImageViewCreateInfo const imageViewCI {
-      .sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image    = mSwapChain.images[i],
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format   = mSwapChain.settings.colorFormat,
-      // * How to read RGBA
-      .components = { VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G, VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A },
-      // * The subresourceRange field describes what the image's purpose is and which part to be accessed.
-      .subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-      .subresourceRange.baseMipLevel   = 0,  // -> MIP-MAPing the texture [??]
-      .subresourceRange.levelCount     = 1,
-      .subresourceRange.baseArrayLayer = 0,
-      .subresourceRange.layerCount     = 1,
-    };
-    vonk__check(vkCreateImageView(mDevice.handle, &imageViewCI, nullptr, &mSwapChain.views[i]));
-  }
-
-  // . Setup default framebuffers' depth-stencil
-  mDefaultDepthTexture = vonk::create::texture(
-    mDevice.handle,
-    mGpu.memory,
-    mSwapChain.settings.extent2D,
-    mSwapChain.settings.depthFormat,
-    VK_SAMPLE_COUNT_1_BIT,
-    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-    VK_IMAGE_ASPECT_DEPTH_BIT);
-
-  // . Setup default framebuffers
-  VkImageView attachments[2];
-  attachments[1] = mDefaultDepthTexture.view;  // Depth
-  mDefaultFrameBuffers.resize(mSwapChain.settings.minImageCount);
-  VkFramebufferCreateInfo const frameBufferCI = {
-    .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-    .pNext           = NULL,
-    .renderPass      = mDefaultRenderPass,
-    .attachmentCount = 2,
-    .pAttachments    = attachments,
-    .width           = mSwapChain.settings.extent2D.width,
-    .height          = mSwapChain.settings.extent2D.height,
-    .layers          = 1,
-  };
-  for (uint32_t i = 0; i < mDefaultFrameBuffers.size(); ++i) {
-    attachments[0] = mSwapChain.views[i];  // Color
-    vonk__check(vkCreateFramebuffer(mDevice.handle, &frameBufferCI, nullptr, &mDefaultFrameBuffers[i]));
-  }
-}
-
 //-----------------------------------------------
 
-void Base::swapchainCleanUp()
+void Base::destroySwapChainDependencies()
 {
   for (auto &pipeline : mPipelines) {
+    // . Command Buffers
     auto &cb = pipeline.commandBuffers;
     if (cb.size() > 0) {
       vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vonk__getSize(cb), vonk__getData(cb));
     }
 
-    for (auto framebuffer : pipeline.frameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
+    // . Frame Buffers
+    for (size_t i = 0; i < pipeline.frameBuffers.size(); ++i) {
+      if (pipeline.frameBuffers[i] != mSwapChain.defaultFrameBuffers[i]) {
+        vkDestroyFramebuffer(mDevice.handle, pipeline.frameBuffers[i], nullptr);
+      }
+    }
   }
-
-  // @DANI move this to vonk::destoy::texture(Texture_t)
-  vkDestroyImageView(mDevice.handle, mDefaultDepthTexture.view, nullptr);
-  vkDestroyImage(mDevice.handle, mDefaultDepthTexture.image, nullptr);
-  vkFreeMemory(mDevice.handle, mDefaultDepthTexture.memory, nullptr);
-
-  for (auto framebuffer : mDefaultFrameBuffers) { vkDestroyFramebuffer(mDevice.handle, framebuffer, nullptr); }
-
-  for (auto imageView : mSwapChain.views) { vkDestroyImageView(mDevice.handle, imageView, nullptr); }
-
-  // NOTE: Do not destroy here the swap-chain in order to use it as .swapchainOld parameter and have a better exchange
-  // on swapchain recreations.
 }
 
 //-----------------------------------------------
 
-void Base::swapchainReCreate()
+void Base::recreateSwapChain()
 {
   vkDeviceWaitIdle(mDevice.handle);
-  swapchainCleanUp();
-  swapchainCreate();
+
+  destroySwapChainDependencies();
+  mSwapChain = vonk::createSwapChain(mInstance, mGpu, mDevice, mSwapChain);
+
   for (size_t i = 0; i < mPipelines.size(); ++i) {
+    // vonk::createPipeline(mDevice, mSwapChain, mPipelines[i]);
     // auto &ci = mPipelinesCI[i];
     vonk::create::pipelineRecreation(
       mPipelines[i],
@@ -536,8 +207,8 @@ void Base::swapchainReCreate()
       mSwapChain,
       mDevice.handle,
       mDevice.commandPool,
-      mDefaultRenderPass,
-      mDefaultFrameBuffers);
+      mSwapChain.defaultRenderPass,
+      mSwapChain.defaultFrameBuffers);
   }
 }
 

@@ -26,29 +26,23 @@ public:
   inline void iterScenes() { mActivePipeline = (mActivePipeline + 1) % mPipelines.size(); }
 
 private:
-  void swapchainCreate();
-  void swapchainReCreate();
-  void swapchainCleanUp();
+  void recreateSwapChain();
+  void destroySwapChainDependencies();
 
   Instance_t  mInstance;
   Gpu_t       mGpu;
   Device_t    mDevice;
   SwapChain_t mSwapChain;
-  SyncBase_t  mSync;
-
-  Texture_t                  mDefaultDepthTexture;
-  VkRenderPass               mDefaultRenderPass;
-  std::vector<VkFramebuffer> mDefaultFrameBuffers;
+  // SyncBase_t  mSync;
 
   std::vector<Pipeline_t>     mPipelines;
   std::vector<PipelineData_t> mPipelinesCI;
   uint32_t                    mActivePipeline = 0u;
 
   // Settings:
-  uint32_t                  sInFlightMaxFrames  = 3;
-  std::vector<const char *> sValidationLayers   = { "VK_LAYER_KHRONOS_validation" };
-  std::vector<const char *> sInstanceExtensions = { VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME };
-  std::vector<const char *> sDeviceExtensions   = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+  uint32_t sInFlightMaxFrames = 3;
+
+  // Resources:
 
 };  // class Base
 }  // namespace vonk

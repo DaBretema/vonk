@@ -21,7 +21,7 @@ void loop(std::function<void(void)> perFrame, std::function<void(void)> onClose,
 VkSurfaceKHR createSurface(VkInstance instance);
 
 VkExtent2D                getFramebufferSize();
-std::vector<char const *> getRequiredInstanceExtensions();
+std::vector<char const *> getInstanceExts();
 
 void setCallbackKeyboard(GLFWkeyfun keyboardCallback);
 

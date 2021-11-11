@@ -1,6 +1,11 @@
 #pragma once
 
+#include <set>
 #include <vector>
+
+namespace vo::algo
+{
+}  // namespace vo::algo
 
 namespace vo::files
 {
