@@ -20,6 +20,9 @@
 !vendor/
 !vendor/**
 
+!img/
+!img/**
+
 !.gitignore
 !.gitmodules
 
