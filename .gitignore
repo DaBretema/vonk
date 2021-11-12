@@ -25,6 +25,8 @@
 
 !cmakelists.txt
 
+!README.md
+
 
 # Extra rules over whitelist
 .DS_Store
