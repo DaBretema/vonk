@@ -13,82 +13,11 @@
 namespace vonk
 {  //
 
-//
+bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts);
+bool checkValidationLayersSupport(std::vector<char const *> const &layers);
 
-//=============================================================================
-// ---- Memory ----
-//=============================================================================
-
-namespace memory
-{  //
-
-  uint32_t getType(VkPhysicalDeviceMemoryProperties memProps, uint32_t typeBits, VkMemoryPropertyFlags requestedProps);
-
-}  // namespace memory
-
-//=============================================================================
-
-//
-
-//=============================================================================
-// ---- Others ----
-//=============================================================================
-
-namespace others
-{  //
-
-  bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts);
-  bool checkValidationLayersSupport(std::vector<char const *> const &layers);
-
-}  // namespace others
-
-//=============================================================================
-
-//
-
-//
-
-//=============================================================================
-// ---- Queue Families ----
-//=============================================================================
-
-namespace queue
-{  //
-
-  enum Type
-  {
-    graphics = 0,
-    present,
-  };
-
-  struct IndicesOpt
-  {
-    std::optional<uint32_t> graphics, present;  //, compute, transfer;
-  };
-
-  // struct Indices
-  // {
-  //   uint32_t graphics, present;  //, compute, transfer;
-  // };
-
-  // struct Queues
-  // {
-  //   VkQueue graphics, present;  //, compute, transfer;
-  // };
-
-  bool           isComplete(IndicesOpt const &indices);
-  QueueIndices_t unrollOptionals(IndicesOpt const &indices);  // Call after: isComplete
-
-  std::vector<uint32_t> getUniqueIndices(QueueIndices_t const &indices);
-  IndicesOpt            findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-
-  Queues_t findQueues(VkDevice device, QueueIndices_t const &indices);
-
-}  // namespace queue
-
-//=============================================================================
-
-//
+uint32_t
+  getMemoryType(VkPhysicalDeviceMemoryProperties memProps, uint32_t typeBits, VkMemoryPropertyFlags requestedProps);
 
 //=============================================================================
 // ---- SWAP CHAIN ----

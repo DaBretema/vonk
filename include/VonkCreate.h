@@ -132,6 +132,8 @@ inline void destroyInstance(Instance_t &instance)
   }
   vkDestroySurfaceKHR(instance.handle, instance.surface, nullptr);
   vkDestroyInstance(instance.handle, nullptr);
+
+  instance = Instance_t {};
 }
 //-----------------------------------------------
 
@@ -141,48 +143,105 @@ inline void destroyInstance(Instance_t &instance)
 
 //-----------------------------------------------
 
-inline Gpu_t pickGpu(Instance_t &instance, std::vector<const char *> const &deviceExts)
+inline Gpu_t pickGpu(
+  Instance_t &                     instance,
+  std::vector<const char *> const &deviceExts,
+  bool                             enableGraphics,
+  bool                             enablePresent,
+  bool                             enableCompute,
+  bool                             enableTransfer)
 {
+  // . Iteration variables
+
   uint32_t gpuCount = 0;
   vkEnumeratePhysicalDevices(instance.handle, &gpuCount, nullptr);
   std::vector<VkPhysicalDevice> gpus(gpuCount);
   vkEnumeratePhysicalDevices(instance.handle, &gpuCount, gpus.data());
 
-  Gpu_t    gpu;
+  Gpu_t    outGpu;
   uint32_t maxScore = 0;
 
-  for (const auto &pd : gpus) {
-    Gpu_t currGpu;
+  // . Evaluate all the gpus
 
-    currGpu.handle = pd;
-    vkGetPhysicalDeviceFeatures(pd, &currGpu.features);
-    vkGetPhysicalDeviceProperties(pd, &currGpu.properties);
-    vkGetPhysicalDeviceMemoryProperties(pd, &currGpu.memory);
+  for (const auto &gpuHandle : gpus) {
+    Gpu_t gpu;
 
-    auto const queueIndicesOpt        = vonk::queue::findIndices(pd, instance.surface);
-    bool const queueIndicesIsComplete = vonk::queue::isComplete(queueIndicesOpt);
-    if (queueIndicesIsComplete) { currGpu.queuesIndices = vonk::queue::unrollOptionals(queueIndicesOpt); }
+    // . Get physical-device info
+    gpu.handle = gpuHandle;
+    vkGetPhysicalDeviceFeatures(gpu.handle, &gpu.features);
+    vkGetPhysicalDeviceProperties(gpu.handle, &gpu.properties);
+    vkGetPhysicalDeviceMemoryProperties(gpu.handle, &gpu.memory);
 
-    if (
-      !queueIndicesIsComplete                                         //
-      or vonk::swapchain::isEmpty(pd, instance.surface)               //
-      or !vonk::others::checkDeviceExtensionsSupport(pd, deviceExts)  //
-    ) {
-      return currGpu;
+    // . Queues Indices
+    // .. Get families
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu.handle, &queueFamilyCount, nullptr);
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(gpu.handle, &queueFamilyCount, queueFamilies.data());
+    // .. Get indices of them
+    bool hasGraphics = false, hasPresent = false, hasCompute = false, hasTransfer = false;
+    for (uint32_t i = 0u; i < queueFamilies.size(); ++i) {
+      auto const flags = queueFamilies.at(i).queueFlags;
+
+      VkBool32 presentSupport = false;
+      vkGetPhysicalDeviceSurfaceSupportKHR(gpu.handle, i, instance.surface, &presentSupport);
+
+      if (!hasGraphics && enableGraphics && (flags & VK_QUEUE_GRAPHICS_BIT)) {
+        hasGraphics          = true;
+        gpu.indices.graphics = i;
+      }
+      if (!hasPresent && enablePresent && presentSupport) {
+        auto const &G       = gpu.indices.graphics;
+        hasPresent          = (!G.has_value() || (G.has_value() && G.value() != i));  // Different from graphics
+        gpu.indices.present = i;
+      }
+      if (!hasCompute && enableCompute && (flags & VK_QUEUE_COMPUTE_BIT)) {
+        hasCompute          = true;
+        gpu.indices.compute = i;
+      }
+      if (!hasTransfer && enableTransfer && (flags & VK_QUEUE_TRANSFER_BIT)) {
+        hasTransfer          = true;
+        gpu.indices.transfer = i;
+      }
+
+      if (hasGraphics && hasPresent && hasCompute && hasTransfer) break;
     }
 
-    uint32_t const isDiscreteGPU = (currGpu.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-    currGpu.score                = (1000 * isDiscreteGPU) + currGpu.properties.limits.maxImageDimension2D;
+    bool queueIndicesIsComplete = true;
+    if (enableGraphics) queueIndicesIsComplete &= gpu.indices.graphics.has_value();
+    if (enablePresent) queueIndicesIsComplete &= gpu.indices.present.has_value();
+    if (enableCompute) queueIndicesIsComplete &= gpu.indices.compute.has_value();
+    if (enableTransfer) queueIndicesIsComplete &= gpu.indices.transfer.has_value();
 
-    if (currGpu.score > maxScore) {
-      gpu      = currGpu;
-      maxScore = currGpu.score;
+    // . Validate the gpu
+    if (
+      !queueIndicesIsComplete                                         //
+      or vonk::swapchain::isEmpty(gpu.handle, instance.surface)       //
+      or !vonk::checkDeviceExtensionsSupport(gpu.handle, deviceExts)  //
+    ) {
+      return gpu;
+    }
+
+    // . Get score from a valid gpu
+    uint32_t const isDiscreteGPU = (gpu.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
+    uint32_t       score         = (1000 * isDiscreteGPU) + gpu.properties.limits.maxImageDimension2D;
+
+    if (score > maxScore) {
+      outGpu   = gpu;
+      maxScore = score;
     }
   }
 
+  vo__infof(
+    "QUEUE INDICES -> g:{} p:{} c:{} t:{}",
+    outGpu.indices.graphics.value_or(UINT32_MAX),
+    outGpu.indices.present.value_or(UINT32_MAX),
+    outGpu.indices.compute.value_or(UINT32_MAX),
+    outGpu.indices.transfer.value_or(UINT32_MAX));
+
+  // . Return if valid gpu has been found
   if (maxScore < 1) { vo__abort("Suitable GPU not found!"); }
-  // vo__infof("QUEUE INDICES -> g:{} p:{}", currGpu.queuesIndices.graphics, currGpu.queuesIndices.present);
-  return gpu;
+  return outGpu;
 }
 
 //-----------------------------------------------
@@ -200,8 +259,16 @@ inline Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   // . Queues' Create Infos
   float const                          queuePriority = 1.0f;
   std::vector<VkDeviceQueueCreateInfo> queueCIs;
+
   // NOTE: If graphics, compute or present queues comes from the same family register it only once
-  for (uint32_t queueFamily : vonk::queue::getUniqueIndices(gpu.queuesIndices)) {
+
+  std::set<uint32_t> uniqueIndices {};
+  if (gpu.indices.graphics.has_value()) uniqueIndices.emplace(gpu.indices.graphics.value());
+  if (gpu.indices.compute.has_value()) uniqueIndices.emplace(gpu.indices.compute.value());
+  if (gpu.indices.transfer.has_value()) uniqueIndices.emplace(gpu.indices.transfer.value());
+  if (gpu.indices.present.has_value()) uniqueIndices.emplace(gpu.indices.present.value());
+
+  for (uint32_t queueFamily : uniqueIndices) {
     queueCIs.push_back(VkDeviceQueueCreateInfo {
       .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
       .queueFamilyIndex = queueFamily,
@@ -226,13 +293,20 @@ inline Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   vonk__check(vkCreateDevice(gpu.handle, &deviceCI, nullptr, &device.handle));
 
   // . Pick required queues
-  device.queues        = vonk::queue::findQueues(device.handle, gpu.queuesIndices);
-  device.queuesIndices = gpu.queuesIndices;  // @DANI : Really needed?
+  if (gpu.indices.graphics.has_value())
+    vkGetDeviceQueue(device.handle, gpu.indices.graphics.value(), 0, &device.queues.graphics);
+  if (gpu.indices.compute.has_value())
+    vkGetDeviceQueue(device.handle, gpu.indices.compute.value(), 0, &device.queues.compute);
+  if (gpu.indices.transfer.has_value())
+    vkGetDeviceQueue(device.handle, gpu.indices.transfer.value(), 0, &device.queues.transfer);
+  if (gpu.indices.present.has_value())
+    vkGetDeviceQueue(device.handle, gpu.indices.present.value(), 0, &device.queues.present);
+  device.indices = gpu.indices;
 
   // . Command Pool :  Maybe move this out and create one per thread
   VkCommandPoolCreateInfo const commandPoolCI {
     .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .queueFamilyIndex = device.queuesIndices.graphics,
+    .queueFamilyIndex = gpu.indices.graphics.value(),
   };
   vonk__check(vkCreateCommandPool(device.handle, &commandPoolCI, nullptr, &device.commandPool));
 
@@ -241,10 +315,11 @@ inline Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
 
 //-----------------------------------------------
 
-inline void destroyDevice(Device_t const &device)
+inline void destroyDevice(Device_t &device)
 {
   vkDestroyCommandPool(device.handle, device.commandPool, nullptr);
   vkDestroyDevice(device.handle, nullptr);
+  device = Device_t {};
 }
 
 //-----------------------------------------------
@@ -391,7 +466,7 @@ inline Texture_t createTexture(
   VkMemoryAllocateInfo const memAllloc {
     .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
     .allocationSize  = memReqs.size,
-    .memoryTypeIndex = vonk::memory::getType(memProps, memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+    .memoryTypeIndex = vonk::getMemoryType(memProps, memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
   };
   vonk__check(vkAllocateMemory(device, &memAllloc, nullptr, &tex.memory));
   vonk__check(vkBindImageMemory(device, tex.image, tex.memory, 0));
@@ -512,7 +587,7 @@ inline SwapChain_t
   SwapChain_t    swapchain          = std::move(oldSwapChain);
 
   bool const        gpDiffQueue = device.queues.graphics != device.queues.present;
-  std::vector const gpIndices   = { device.queuesIndices.graphics, device.queuesIndices.present };
+  std::vector const gpIndices   = { device.indices.graphics.value(), device.indices.present.value() };
 
   // . Get supported settings
   swapchain.settings = vonk::swapchain::getSettings(

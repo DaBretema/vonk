@@ -13,14 +13,11 @@ namespace vonk
 
 struct QueueIndices_t
 {
-  uint32_t graphics, present;  //, compute, transfer;
+  std::optional<uint32_t> graphics = {}, present = {}, compute = {}, transfer = {};
 };
-
-//-----------------------------------------------
-
 struct Queues_t
 {
-  VkQueue graphics, present;  //, compute, transfer;
+  VkQueue graphics, present, compute, transfer;
 };
 
 //-----------------------------------------------
@@ -56,12 +53,13 @@ struct Instance_t
 
 struct Gpu_t
 {
-  uint32_t                         score  = 0u;
-  VkPhysicalDevice                 handle = VK_NULL_HANDLE;
+  VkPhysicalDevice handle = VK_NULL_HANDLE;
+
   VkPhysicalDeviceMemoryProperties memory;
   VkPhysicalDeviceFeatures         features;
   VkPhysicalDeviceProperties       properties;
-  QueueIndices_t                   queuesIndices;
+
+  QueueIndices_t indices;
 
   Instance_t *pInstance;
 };
@@ -73,7 +71,7 @@ struct Device_t
   VkDevice handle = VK_NULL_HANDLE;
 
   Queues_t       queues;
-  QueueIndices_t queuesIndices;
+  QueueIndices_t indices;
 
   VkCommandPool commandPool = VK_NULL_HANDLE;
 

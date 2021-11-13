@@ -126,14 +126,14 @@ void Base::init()
   //=====
   //=====   SETTINGS ¿?¿?¿?¿?¿?¿
 
-  if (!vonk::others::checkValidationLayersSupport(mInstance.layers)) {
+  if (!vonk::checkValidationLayersSupport(mInstance.layers)) {
     vo__abort("Validation layers requested, but not available!");
   }
 
   // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
   mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
   // . Pick Gpu (aka: physical device)
-  mGpu = vonk::pickGpu(mInstance, mDevice.exts);
+  mGpu = vonk::pickGpu(mInstance, mDevice.exts, true, true, false, false);
   // . Create Device (aka: gpu-manager / logical-device)
   mDevice = vonk::createDevice(mInstance, mGpu);
   // . Create SwapChain

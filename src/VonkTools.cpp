@@ -6,251 +6,53 @@
 namespace vonk
 {  //
 
-//
+//-----------------------------------------------
 
-//=============================================================================
-// ---- Memory ----
-//=============================================================================
+bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts)
+{
+  if (exts.empty()) return true;
 
-namespace memory
-{  //
+  uint32_t count;
+  vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+  std::vector<VkExtensionProperties> available(count);
+  vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, available.data());
 
-  /**
-   * Get the index of a memory type that has all the requested property bits set
-   * @param typeBits Bit mask with bits set for each memory type supported by the resource to request for (from
-   * VkMemoryRequirements)
-   * @param properties Bit mask of properties for the memory type to request.
-   * @param (Optional) memTypeFound Pointer to a bool that is set to true if a matching memory type has been found.
-   * @return Index of the requested memory type.
-   */
-  uint32_t getType(VkPhysicalDeviceMemoryProperties memProps, uint32_t typeBits, VkMemoryPropertyFlags requestedProps)
-  {
-    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
-      bool const propsMatch = (memProps.memoryTypes[i].propertyFlags & requestedProps) == requestedProps;
-      if ((typeBits & 1) == 1 && propsMatch) { return i; }
-      typeBits >>= 1;
-    }
-    vo__abort("Couldn't get requested memory properties");
-    return 0;
+  std::set<std::string> required(exts.begin(), exts.end());
+  for (const auto &item : available) { required.erase(item.extensionName); }
+  return required.empty();
+}
+
+//-----------------------------------------------
+
+bool checkValidationLayersSupport(std::vector<char const *> const &layers)
+{
+  if (layers.empty()) return true;
+
+  uint32_t count;
+  vkEnumerateInstanceLayerProperties(&count, nullptr);
+  std::vector<VkLayerProperties> available(count);
+  vkEnumerateInstanceLayerProperties(&count, available.data());
+
+  std::set<std::string> required(layers.begin(), layers.end());
+  for (const auto &item : available) { required.erase(item.layerName); }
+  return required.empty();
+}
+
+//-----------------------------------------------
+
+uint32_t
+  getMemoryType(VkPhysicalDeviceMemoryProperties memProps, uint32_t typeBits, VkMemoryPropertyFlags requestedProps)
+{
+  for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+    bool const propsMatch = (memProps.memoryTypes[i].propertyFlags & requestedProps) == requestedProps;
+    if ((typeBits & 1) == 1 && propsMatch) { return i; }
+    typeBits >>= 1;
   }
+  vo__abort("Couldn't get requested memory properties");
+  return 0;
+}
 
-}  // namespace memory
-
-//=============================================================================
-
-//
-
-//=============================================================================
-// ---- Others ----
-//=============================================================================
-
-namespace others
-{  //
-
-  //-----------------------------------------------
-
-  bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts)
-  {
-    if (exts.empty()) return true;
-
-    uint32_t count;
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
-    std::vector<VkExtensionProperties> available(count);
-    vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, available.data());
-
-    std::set<std::string> required(exts.begin(), exts.end());
-    for (const auto &item : available) { required.erase(item.extensionName); }
-    return required.empty();
-  }
-
-  //-----------------------------------------------
-
-  bool checkValidationLayersSupport(std::vector<char const *> const &layers)
-  {
-    if (layers.empty()) return true;
-
-    uint32_t count;
-    vkEnumerateInstanceLayerProperties(&count, nullptr);
-    std::vector<VkLayerProperties> available(count);
-    vkEnumerateInstanceLayerProperties(&count, available.data());
-
-    std::set<std::string> required(layers.begin(), layers.end());
-    for (const auto &item : available) { required.erase(item.layerName); }
-    return required.empty();
-  }
-
-}  // namespace others
-
-//=============================================================================
-
-//=============================================================================
-// ---- Debug Messenger ----
-//=============================================================================
-
-namespace debugmessenger
-{  //
-
-  static inline VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT             messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-    MBU void *                                  pUserData)
-  {
-    static std::unordered_map<int32_t, bool> CACHE {};
-    auto const                               ID = pCallbackData->messageIdNumber;
-
-    if (!CACHE[ID] && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
-      fmt::print(
-        "\n ❗️ [VALIDATION LAYERS] - {} at {}{}"
-        "\n--------------------------------------------------------------------------------\n{}\n",
-        vonk::ToStr_DebugSeverity.at(messageSeverity),
-        vonk::ToStr_DebugType.at(messageType),
-        pUserData ? fmt::format("- {}", pUserData) : std::string { "" },
-        pCallbackData->pMessage);
-
-      CACHE[ID] = true;
-    }
-
-    return VK_FALSE;
-  }
-
-  //-----------------------------------------------
-
-  void create(
-    VkInstance const &               instance,
-    VkDebugUtilsMessengerEXT &       debugHandle,
-    std::vector<const char *> const &validationLayers)
-  {
-    static VkDebugUtilsMessengerCreateInfoEXT debugmessengerCreateInfo {
-      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-
-      .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT    //
-                         | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT  //
-                         | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-
-      .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT       //
-                     | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT  //
-                     | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-
-      .pfnUserCallback = sDebugMessengerCallback,
-
-      .pUserData = nullptr,  // Optional
-      .pNext     = nullptr,  // Mandatory
-      .flags     = 0,        // Mandatory
-    };
-
-    if (validationLayers.empty()) return;
-    vonk__instanceFn(instance, vkCreateDebugUtilsMessengerEXT, &debugmessengerCreateInfo, nullptr, &debugHandle);
-  }
-
-  //-----------------------------------------------
-
-  void destroy(
-    VkInstance const &               instance,
-    VkDebugUtilsMessengerEXT &       debugHandle,
-    std::vector<const char *> const &validationLayers)
-  {
-    if (validationLayers.empty()) return;
-    vonk__instanceFn(instance, vkDestroyDebugUtilsMessengerEXT, debugHandle, nullptr);
-  }
-
-  //-----------------------------------------------
-
-}  // namespace debugmessenger
-
-//=============================================================================
-
-//
-
-//=============================================================================
-// ---- Queues ----
-//=============================================================================
-
-namespace queue
-{  //
-
-  //-----------------------------------------------
-
-  bool isComplete(IndicesOpt const &indicesOpt)
-  {
-    return true                                 //
-           and indicesOpt.graphics.has_value()  //
-           and indicesOpt.present.has_value()   //
-                                                //  and indicesOpt.compute.has_value()   //
-                                                //  and indicesOpt.transfer.has_value()  //
-      ;
-  };
-
-  //-----------------------------------------------
-
-  QueueIndices_t unrollOptionals(IndicesOpt const &indicesOpt)
-  {
-    QueueIndices_t indices;
-    indices.graphics = indicesOpt.graphics.value();
-    indices.present  = indicesOpt.present.value();
-    // indices.compute  = indicesOpt.compute.value();
-    // indices.transfer  = indicesOpt.transfer.value();
-    return indices;
-  };
-
-  //-----------------------------------------------
-
-  std::vector<uint32_t> getUniqueIndices(QueueIndices_t const &indices)
-  {
-    std::set<uint32_t> uniqueIndices { indices.graphics, indices.present, /* indices.compute, indices.transfer */ };
-    return std::vector<uint32_t> { uniqueIndices.begin(), uniqueIndices.end() };
-  }
-
-  //-----------------------------------------------
-
-  IndicesOpt findIndices(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
-  {
-    if (physicalDevice == VK_NULL_HANDLE or surface == VK_NULL_HANDLE) {
-      vo__assert(0);
-      return {};
-    }
-
-    // . Get device families
-    uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
-
-    // . Indices to find
-    IndicesOpt indicesOpt;
-
-    // . Find
-    for (uint32_t i = 0u; (!isComplete(indicesOpt) and i < queueFamilies.size()); ++i) {
-      // .. Graphics
-      if (queueFamilies.at(i).queueFlags & VK_QUEUE_GRAPHICS_BIT) { indicesOpt.graphics = i; }
-      // .. Present
-      VkBool32 presentSupport = false;
-      vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
-      if (presentSupport) { indicesOpt.present = i; }
-    }
-
-    return indicesOpt;
-  }
-
-  //-----------------------------------------------
-
-  Queues_t findQueues(VkDevice device, QueueIndices_t const &indices)
-  {
-    Queues_t queues;
-    vkGetDeviceQueue(device, indices.graphics, 0, &queues.graphics);
-    vkGetDeviceQueue(device, indices.present, 0, &queues.present);
-    // vkGetDeviceQueue(device, indices.compute, 0, &queues.compute);
-    // vkGetDeviceQueue(device, indices.transfer, 0, &queues.transfer);
-    return queues;
-  }
-
-  //-----------------------------------------------
-
-}  // namespace queue
-
-//=============================================================================
-
-//
+//-----------------------------------------------
 
 //=============================================================================
 // --- SWAP CHAIN ---
