@@ -234,10 +234,10 @@ inline Gpu_t pickGpu(
 
   vo__infof(
     "QUEUE INDICES -> g:{} p:{} c:{} t:{}",
-    outGpu.indices.graphics.value_or(UINT32_MAX),
-    outGpu.indices.present.value_or(UINT32_MAX),
-    outGpu.indices.compute.value_or(UINT32_MAX),
-    outGpu.indices.transfer.value_or(UINT32_MAX));
+    outGpu.indices.graphics.has_value() ? fmt::to_string(outGpu.indices.graphics.value()) : "<>",
+    outGpu.indices.present.has_value() ? fmt::to_string(outGpu.indices.present.value()) : "<>",
+    outGpu.indices.compute.has_value() ? fmt::to_string(outGpu.indices.compute.value()) : "<>",
+    outGpu.indices.transfer.has_value() ? fmt::to_string(outGpu.indices.transfer.value()) : "<>");
 
   // . Return if valid gpu has been found
   if (maxScore < 1) { vo__abort("Suitable GPU not found!"); }
