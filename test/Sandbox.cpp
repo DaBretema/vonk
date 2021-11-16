@@ -74,8 +74,8 @@ int main()
   // . Init
 
   vonk.init();
-  MBU auto const &baseDrawShader = vonk.createDrawShader("base", "base2", "base");
-  // MBU auto const &altDrawShader  = vonk.createDrawShader("alt", "base", "base");
+  MBU auto const &baseDrawShader = vonk.createDrawShader("base", "base", "base");
+  // MBU auto const &altDrawShader  = vonk.createDrawShader("withInputData", "base_2", "base");
 
   // .
   // . Setup
