@@ -22,20 +22,30 @@ struct Queues_t
 
 //-----------------------------------------------
 
-struct SwapShainSettings_t
+struct SurfaceSupport_t
 {
-  bool vsync = true;
-
-  VkExtent2D                    extent2D             = { 1280, 720 };
-  VkPresentModeKHR              presentMode          = VK_PRESENT_MODE_FIFO_KHR;
-  uint32_t                      minImageCount        = 0u;
-  VkFormat                      depthFormat          = VK_FORMAT_UNDEFINED;
-  VkFormat                      colorFormat          = VK_FORMAT_B8G8R8A8_SRGB;
-  VkColorSpaceKHR               colorSpace           = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-  VkSurfaceTransformFlagBitsKHR preTransformFlag     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-  VkCompositeAlphaFlagBitsKHR   compositeAlphaFlag   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  VkImageUsageFlags             extraImageUsageFlags = {};
+  VkSurfaceCapabilitiesKHR        caps;
+  std::vector<VkSurfaceFormatKHR> formats;
+  std::vector<VkPresentModeKHR>   presentModes;
+  VkFormat                        depthFormat;
 };
+
+//-----------------------------------------------
+
+// struct SwapShainSettings_t
+// {
+//   bool vsync = true;
+
+//   VkExtent2D                    extent2D             = { 1280, 720 };
+//   VkPresentModeKHR              presentMode          = VK_PRESENT_MODE_FIFO_KHR;
+//   uint32_t                      minImageCount        = 0u;
+//   VkFormat                      depthFormat          = VK_FORMAT_UNDEFINED;
+//   VkFormat                      colorFormat          = VK_FORMAT_B8G8R8A8_SRGB;
+//   VkColorSpaceKHR               colorSpace           = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+//   VkSurfaceTransformFlagBitsKHR preTransformFlag     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+//   VkCompositeAlphaFlagBitsKHR   compositeAlphaFlag   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+//   VkImageUsageFlags             extraImageUsageFlags = {};
+// };
 
 //-----------------------------------------------
 
@@ -59,7 +69,8 @@ struct Gpu_t
   VkPhysicalDeviceFeatures         features;
   VkPhysicalDeviceProperties       properties;
 
-  QueueIndices_t indices;
+  SurfaceSupport_t surfSupp;
+  QueueIndices_t   indices;
 
   Instance_t *pInstance;
 };
@@ -93,8 +104,8 @@ struct Texture_t
 
 struct SwapChain_t
 {
-  VkSwapchainKHR           handle = VK_NULL_HANDLE;
-  SwapShainSettings_t      settings;
+  VkSwapchainKHR handle = VK_NULL_HANDLE;
+  // SwapShainSettings_t      settings;
   std::vector<VkImage>     images;
   std::vector<VkImageView> views;
 
@@ -102,7 +113,17 @@ struct SwapChain_t
   Texture_t                  defaultDepthTexture;
   VkRenderPass               defaultRenderPass = VK_NULL_HANDLE;
 
-  static constexpr uint32_t sInFlightMaxFrames = 3;
+  bool vsync = true;
+
+  VkExtent2D                    extent2D             = { 1280, 720 };
+  VkPresentModeKHR              presentMode          = VK_PRESENT_MODE_FIFO_KHR;
+  uint32_t                      minImageCount        = 0u;
+  VkFormat                      depthFormat          = VK_FORMAT_UNDEFINED;
+  VkFormat                      colorFormat          = VK_FORMAT_B8G8R8A8_SRGB;
+  VkColorSpaceKHR               colorSpace           = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+  VkSurfaceTransformFlagBitsKHR preTransformFlag     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  VkCompositeAlphaFlagBitsKHR   compositeAlphaFlag   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  VkImageUsageFlags             extraImageUsageFlags = {};
 
   struct
   {
@@ -115,23 +136,9 @@ struct SwapChain_t
     std::vector<VkFence> acquire;
     std::vector<VkFence> submit;
   } fences;
+
+  static constexpr uint32_t sInFlightMaxFrames = 3;
 };
-
-//-----------------------------------------------
-
-// struct SyncBase_t
-// {
-//   struct
-//   {
-//     std::vector<VkSemaphore> render;
-//     std::vector<VkSemaphore> present;
-//   } semaphores;
-//   struct
-//   {
-//     std::vector<VkFence> acquire;
-//     std::vector<VkFence> submit;
-//   } fences;
-// };
 
 //-----------------------------------------------
 
@@ -214,13 +221,31 @@ using CommandBuffersData_t = std::vector<CommandBufferData_t>;
 
 //-----------------------------------------------
 
-using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>;
+struct Shader_t
+{
+  std::string                     path;
+  VkShaderModule                  module;
+  VkPipelineShaderStageCreateInfo stageCI;
+};
+
+struct DrawShader_t
+{
+  Shader_t vert;
+  Shader_t frag;
+  // Shader_t tese;
+  // Shader_t tesc;
+  // Shader_t geom;
+};
+
+using ComputeShader_t = Shader_t;
+
+// using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>;
 
 //-----------------------------------------------
 
 struct PipelineLayoutData_t
 {
-  // . Used for: vonk__check(vkCreatePipelineLayout(mDevice.handle, &pipelineLayoutCI, nullptr, &mPipeline.layout));
+  // . Used for: VkCheck(vkCreatePipelineLayout(mDevice.handle, &pipelineLayoutCI, nullptr, &mPipeline.layout));
   VkPipelineLayoutCreateInfo pipelineLayoutCI {
     .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
     .setLayoutCount         = 0,        // Optional
@@ -255,8 +280,8 @@ struct PipelineData_t
   VkSampleCountFlagBits ffSamples           = VK_SAMPLE_COUNT_1_BIT;
   VkCompareOp           ffDepthOp           = VK_COMPARE_OP_LESS;
 
-  // FixedFuncs_t         fixedFuncs;
-  ShadersData_t        shadersData;
+  DrawShader_t const *pDrawShader;
+  // ComputeShader_t *    pComputeShader;
   RenderPassData_t     renderPassData;
   PipelineLayoutData_t pipelineLayoutData;
 
@@ -276,14 +301,13 @@ struct PipelineData_t
   CommandBuffersData_t    commandBuffersData;
 };
 
-struct Pipeline_t
+struct Pipeline_t  // @DANI Change this to DrawPipeline_t and create ComputePipeline_t
 {
   VkPipeline handle = VK_NULL_HANDLE;
   // . Static
-  VkPipelineLayout                                layout = VK_NULL_HANDLE;
-  std::vector<VkPipelineShaderStageCreateInfo>    stagesCI;
-  VkRenderPass                                    renderpass = VK_NULL_HANDLE;
-  std::unordered_map<std::string, VkShaderModule> shaderModules;
+  VkPipelineLayout                             layout = VK_NULL_HANDLE;
+  std::vector<VkPipelineShaderStageCreateInfo> stagesCI;
+  VkRenderPass                                 renderpass = VK_NULL_HANDLE;
   // . Dynamic
   std::vector<VkFramebuffer>   frameBuffers;
   std::vector<VkCommandBuffer> commandBuffers;

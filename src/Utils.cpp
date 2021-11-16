@@ -3,12 +3,6 @@
 
 #include <fstream>
 
-namespace vo::algo
-{
-}  // namespace vo::algo
-
-//-----------------------------------------------
-
 namespace vo::files
 {
 //
@@ -21,7 +15,7 @@ std::vector<char> read(std::string const &filepath)
   // . Open file from the end or return empty
   auto file = std::ifstream { filepath, std::ios::ate | std::ios::binary };
   if (!file.is_open()) {
-    vo__abortf("Issues opening shader: {}", filepath);
+    Abortf("Issues opening shader: {}", filepath);
     return {};
   }
 

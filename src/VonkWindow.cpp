@@ -18,12 +18,12 @@ void init(int32_t w_, int32_t h_, char const *title_)
   h     = h_;
   title = title_;
 
-  vo__check(glfwInit());
+  AbortIf(glfwInit());
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);     // Resize windows takes special care
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
 
   handle = glfwCreateWindow(w, h, (title + " : Vulkan Engine").c_str(), nullptr, nullptr);
-  if (!handle) { vo__abort("Unable to create a window using GLFW"); }
+  if (!handle) { Abort("Unable to create a window using GLFW"); }
 
   // . Default Callbacks
   // On FrameBuffer Resized
@@ -76,7 +76,7 @@ void loop(std::function<void(void)> perFrame, std::function<void(void)> onClose,
 VkSurfaceKHR createSurface(VkInstance instance)
 {
   VkSurfaceKHR surface;
-  vonk__check(glfwCreateWindowSurface(instance, handle, nullptr, &surface));
+  VkCheck(glfwCreateWindowSurface(instance, handle, nullptr, &surface));
   return surface;
 }
 

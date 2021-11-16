@@ -15,45 +15,52 @@
 
 //-----------------------------------------------
 
-//
-// // === VONSAI MACROS = vo__
-//
+// Vector C++ to C helpers
+#define GetSize(v)            v.size()
+#define GetData(v)            v.data()
+#define GetSizeU32(v)         static_cast<uint32_t>(GetSize(v))
+#define GetSizeAs(newType, v) static_cast<newType>(GetSize(v))
+#define GetDataAs(newType, v) reinterpret_cast<newType>(GetData(v))
 
 //-----------------------------------------------
 
 // Logging w/o format
-#define vo__info(msg) fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define vo__warn(msg) fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define vo__err(msg)  fmt::print("⛔️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define vo__abort(msg) \
-  vo__err(msg);        \
+#define LogInfo(msg)  fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define LogWarn(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define LogError(msg) fmt::print("⛔️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define Abort(msg) \
+  LogError(msg);   \
   abort();
 
 //-----------------------------------------------
 
 // Logging w/ format
-#define vo__infof(msg, ...) vo__info(fmt::format(msg, __VA_ARGS__))
-#define vo__warnf(msg, ...) vo__err(fmt::format(msg, __VA_ARGS__))
-#define vo__errf(msg, ...)  vo__err(fmt::format(msg, __VA_ARGS__))
-#define vo__abortf(msg, ...)  \
-  vo__errf(msg, __VA_ARGS__); \
+#define LogInfof(msg, ...)  LogInfo(fmt::format(msg, __VA_ARGS__))
+#define LogWarnf(msg, ...)  LogWarn(fmt::format(msg, __VA_ARGS__))
+#define LogErrorf(msg, ...) LogError(fmt::format(msg, __VA_ARGS__))
+#define Abortf(msg, ...)       \
+  LogErrorf(msg, __VA_ARGS__); \
   abort();
 
 //-----------------------------------------------
 
 // Evaluate critical condition
-#define vo__check(conditionCode) \
-  if (!(conditionCode)) { vo__abort(#conditionCode); }
+#define AbortIf(conditionCode) \
+  if (!(conditionCode)) { Abort(#conditionCode); }
+
+// Evaluate critical condition
+#define AbortIff(conditionCode, msg, ...) \
+  if (!(conditionCode)) { Abortf("{} --> {}", #conditionCode, fmt::format(msg, __VA_ARGS__)); }
 
 //-----------------------------------------------
 
 // Custom Assert
-#define vo__assert(cond) assert(cond)
+#define Assert(cond) assert(cond)
 
 //-----------------------------------------------
 
 // Fmt ptr
-#define vo__ptrstr(p) fmt::format("{}", fmt::ptr(p))
+#define PtrStr(p) fmt::format("{}", fmt::ptr(p))
 
 //-----------------------------------------------
 
@@ -64,25 +71,15 @@
 //-----------------------------------------------
 
 // Validate api calls
-#define vonk__check(vulkanCode) \
-  if (VkResult res = vulkanCode; res != VK_SUCCESS) { vo__abortf("{} : {}", res, #vulkanCode); }
-
-//-----------------------------------------------
-
-// Vector C++ to C helpers
-#define vonk__castSize(v)           static_cast<uint32_t>(v)
-#define vonk__getSize(v)            vonk__castSize(v.size())
-#define vonk__getData(v)            v.data()
-#define vonk__getDataAs(newType, v) reinterpret_cast<newType>(vonk__getData(v))
-
-//-----------------------------------------------
+#define VkCheck(vulkanCode) \
+  if (VkResult res = vulkanCode; res != VK_SUCCESS) { Abortf("{} : {}", res, #vulkanCode); }
 
 // Get instance functions
-#define vonk__instanceFn(instance, extName, ...)                                  \
+#define VkInstanceFn(instance, extName, ...)                                      \
   if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
     fn(instance, __VA_ARGS__);                                                    \
   } else {                                                                        \
-    vo__errf("Function {} is not available", #extName);                           \
+    LogErrorf("Function {} is not available", #extName);                          \
   }
 
 //-----------------------------------------------

@@ -5,15 +5,14 @@
 
 #include "_vulkan.h"
 #include "VonkTypes.h"
-#include "VonkTools.h"
 
 namespace vonk
 {  //
 
-class Base
+class Vonk
 {
 public:
-  Base() = default;
+  Vonk() = default;
 
   void init();
   void cleanup();
@@ -21,9 +20,16 @@ public:
   void waitDevice();
   void addPipeline(PipelineData_t const &ci);
 
-  inline auto currentFormat() const { return mSwapChain.settings.colorFormat; }
+  inline auto currentFormat() const { return mSwapChain.colorFormat; }
 
   inline void iterScenes() { mActivePipeline = (mActivePipeline + 1) % mPipelines.size(); }
+
+  // . Shaders
+  DrawShader_t const &
+    createDrawShader(std::string const &keyName, std::string const &vertexName, std::string const &fragmentName);
+  DrawShader_t const &getDrawShader(std::string const &keyName);
+  Shader_t const &    createComputeShader(std::string const &name);
+  Shader_t const &    getComputeShader(std::string const &name);
 
 private:
   void recreateSwapChain();
@@ -33,7 +39,9 @@ private:
   Gpu_t       mGpu;
   Device_t    mDevice;
   SwapChain_t mSwapChain;
-  // SyncBase_t  mSync;
+
+  std::unordered_map<std::string, DrawShader_t> mDrawShaders;
+  std::unordered_map<std::string, Shader_t>     mComputeShaders;
 
   std::vector<Pipeline_t>     mPipelines;
   std::vector<PipelineData_t> mPipelinesCI;
@@ -44,5 +52,5 @@ private:
 
   // Resources:
 
-};  // class Base
+};  // class Vonk
 }  // namespace vonk

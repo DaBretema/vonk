@@ -29,13 +29,13 @@ endfunction()
 cmake_minimum_required(VERSION 3.0)
 set(CMAKE_MESSAGE_LOG_LEVEL "WARNING")
 
-project(Vonsai)
+project(Vonk)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Makefile and Ninja only
 
 set(CMAKE_CXX_FLAGS "")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wrange-loop-construct")
 
 
 # ------------------------------------------------------------------------- #

@@ -1,14 +1,62 @@
-#include "VonkBase.h"
-#include "VonkCreate.h"
+#include "Vonk.h"
+#include "VonkResources.h"
 #include "VonkTools.h"
 #include "VonkWindow.h"
 
 namespace vonk
 {  //
 
-//----------------------------------------------- !!
+//-----------------------------------------------
 
-void Base::addPipeline(PipelineData_t const &ci)
+//
+// // SHADERs
+//
+
+//-----------------------------------------------
+
+DrawShader_t const &
+  Vonk::createDrawShader(std::string const &keyName, std::string const &vertexName, std::string const &fragmentName)
+{
+  mDrawShaders[keyName] = {
+    .vert = vonk::createShader(mDevice.handle, vertexName, VK_SHADER_STAGE_VERTEX_BIT),
+    .frag = vonk::createShader(mDevice.handle, fragmentName, VK_SHADER_STAGE_FRAGMENT_BIT),
+  };
+  return mDrawShaders[keyName];
+}
+
+//-----------------------------------------------
+
+DrawShader_t const &Vonk::getDrawShader(std::string const &keyName)
+{
+  AbortIf(mDrawShaders.count(keyName) < 1);
+  return mDrawShaders[keyName];
+}
+
+//-----------------------------------------------
+
+Shader_t const &Vonk::createComputeShader(std::string const &name)
+{
+  mComputeShaders[name] = vonk::createShader(mDevice.handle, name, VK_SHADER_STAGE_COMPUTE_BIT);
+  return mComputeShaders[name];
+}
+
+//-----------------------------------------------
+
+Shader_t const &Vonk::getComputeShader(std::string const &name)
+{
+  AbortIf(mComputeShaders.count(name) < 1);
+  return mComputeShaders[name];
+}
+
+//-----------------------------------------------
+
+//
+// // PIPELINEs
+//
+
+//-----------------------------------------------
+
+void Vonk::addPipeline(PipelineData_t const &ci)
 {
   mPipelinesCI.push_back(ci);
   mPipelines.push_back(vonk::create::pipeline(
@@ -22,11 +70,17 @@ void Base::addPipeline(PipelineData_t const &ci)
 
 //-----------------------------------------------
 
-void Base::waitDevice() { vkDeviceWaitIdle(mDevice.handle); }
+//
+// // FRAMEs
+//
 
 //-----------------------------------------------
 
-void Base::drawFrame()
+void Vonk::waitDevice() { vkDeviceWaitIdle(mDevice.handle); }
+
+//-----------------------------------------------
+
+void Vonk::drawFrame()
 {
   static size_t currFrame = 0;
 
@@ -53,7 +107,7 @@ void Base::drawFrame()
     recreateSwapChain();
     return;
   } else if (acquireRet != VK_SUCCESS && acquireRet != VK_SUBOPTIMAL_KHR) {
-    vo__err("Failed to acquire swap chain image!");
+    LogError("Failed to acquire swap chain image!");
   }
 
   // (1.3) Check if a previous frame is using this image (i.e. there is its fence to wait on)
@@ -85,7 +139,7 @@ void Base::drawFrame()
 
   // (2.3) Reset fences right before asking for draw
   vkResetFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame]);
-  vonk__check(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
+  VkCheck(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
 
   //=====
   //=====   3. DUMP TO SCREEN : Present Queue
@@ -107,10 +161,10 @@ void Base::drawFrame()
 
   // (3.3) Validate swapchain state
   if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vonk::window::framebufferResized) {
-    vonk::window::framebufferResized = false;  // move this variable to vonk::Base
+    vonk::window::framebufferResized = false;  // move this variable to vonk::Vonk
     recreateSwapChain();
   } else if (presentRet != VK_SUCCESS) {
-    vo__err("Failed to present swap chain image!");
+    LogError("Failed to present swap chain image!");
   }
 
   //=====
@@ -121,76 +175,31 @@ void Base::drawFrame()
 
 //-----------------------------------------------
 
-void Base::init()
-{
-  //=====
-  //=====   SETTINGS ¿?¿?¿?¿?¿?¿
-
-  if (!vonk::checkValidationLayersSupport(mInstance.layers)) {
-    vo__abort("Validation layers requested, but not available!");
-  }
-
-  // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
-  mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
-  // . Pick Gpu (aka: physical device)
-  mGpu = vonk::pickGpu(mInstance, mDevice.exts, true, true, false, false);
-  // . Create Device (aka: gpu-manager / logical-device)
-  mDevice = vonk::createDevice(mInstance, mGpu);
-  // . Create SwapChain
-  mSwapChain = vonk::createSwapChain(mInstance, mGpu, mDevice, mSwapChain);
-}
+//
+// // SWAPCHAIN
+//
 
 //-----------------------------------------------
 
-void Base::cleanup()
-{
-  //=====
-  //=====   USER DEFINED
-
-  for (auto &pipeline : mPipelines) {
-    vkDestroyPipeline(mDevice.handle, pipeline.handle, nullptr);
-    vkDestroyPipelineLayout(mDevice.handle, pipeline.layout, nullptr);
-    if (pipeline.renderpass != mSwapChain.defaultRenderPass)
-      vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);
-
-    for (auto [name, shaderModule] : pipeline.shaderModules) {
-      vkDestroyShaderModule(mDevice.handle, shaderModule, nullptr);
-    }
-    // vonk::destroyPipeline(pipeline, mDefaultRenderPass);
-  }
-
-  vonk::destroySwapChain(mDevice, mSwapChain, false);
-  vonk::destroyDevice(mDevice);
-  vonk::destroyInstance(mInstance);
-}
-
-//-----------------------------------------------
-//-----------------------------------------------
-//-----------------------------------------------
-
-//-----------------------------------------------
-
-void Base::destroySwapChainDependencies()
+void Vonk::destroySwapChainDependencies()
 {
   for (auto &pipeline : mPipelines) {
     // . Command Buffers
     auto &cb = pipeline.commandBuffers;
-    if (cb.size() > 0) {
-      vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, vonk__getSize(cb), vonk__getData(cb));
-    }
+    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, GetSizeU32(cb), GetData(cb)); }
 
-    // . Frame Buffers
-    for (size_t i = 0; i < pipeline.frameBuffers.size(); ++i) {
-      if (pipeline.frameBuffers[i] != mSwapChain.defaultFrameBuffers[i]) {
-        vkDestroyFramebuffer(mDevice.handle, pipeline.frameBuffers[i], nullptr);
-      }
-    }
+    // // . Frame Buffers
+    // for (size_t i = 0; i < pipeline.frameBuffers.size(); ++i) {
+    //   if (pipeline.frameBuffers[i] != mSwapChain.defaultFrameBuffers[i]) {
+    //     vkDestroyFramebuffer(mDevice.handle, pipeline.frameBuffers[i], nullptr);
+    //   }
+    // }
   }
 }
 
 //-----------------------------------------------
 
-void Base::recreateSwapChain()
+void Vonk::recreateSwapChain()
 {
   vkDeviceWaitIdle(mDevice.handle);
 
@@ -210,6 +219,65 @@ void Base::recreateSwapChain()
       mSwapChain.defaultRenderPass,
       mSwapChain.defaultFrameBuffers);
   }
+}
+
+//-----------------------------------------------
+
+//
+// // FLOW
+//
+
+//-----------------------------------------------
+
+void Vonk::init()
+{
+  //=====
+  //=====   SETTINGS ¿?¿?¿?¿?¿?¿
+
+  if (!vonk::checkValidationLayersSupport(mInstance.layers)) {
+    Abort("Validation layers requested, but not available!");
+  }
+
+  // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
+  mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
+  // . Pick Gpu (aka: physical device)
+  mGpu = vonk::pickGpu(mInstance, mDevice.exts, true, true, false, false);
+  // . Create Device (aka: gpu-manager / logical-device)
+  mDevice = vonk::createDevice(mInstance, mGpu);
+  // . Create SwapChain
+  mSwapChain = vonk::createSwapChain(mInstance, mGpu, mDevice, mSwapChain);
+}
+
+//-----------------------------------------------
+
+void Vonk::cleanup()
+{
+  // . Pipelines
+
+  for (auto &pipeline : mPipelines) {
+    vkDestroyPipeline(mDevice.handle, pipeline.handle, nullptr);
+    vkDestroyPipelineLayout(mDevice.handle, pipeline.layout, nullptr);
+    if (pipeline.renderpass != mSwapChain.defaultRenderPass)
+      vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);
+    // vonk::destroyPipeline(pipeline, mDefaultRenderPass); // TODO
+  }
+
+  // . Shaders
+
+  for (auto const &[k, ds] : mDrawShaders) {
+    vkDestroyShaderModule(mDevice.handle, ds.vert.module, nullptr);
+    vkDestroyShaderModule(mDevice.handle, ds.frag.module, nullptr);
+    // vkDestroyShaderModule(mDevice.handle, ds.tese.module, nullptr);
+    // vkDestroyShaderModule(mDevice.handle, ds.tesc.module, nullptr);
+    // vkDestroyShaderModule(mDevice.handle, ds.gemo.module, nullptr);
+  }
+  for (auto const &[k, cs] : mComputeShaders) { vkDestroyShaderModule(mDevice.handle, cs.module, nullptr); }
+
+  // . Base
+
+  vonk::destroySwapChain(mDevice, mSwapChain, false);
+  vonk::destroyDevice(mDevice);
+  vonk::destroyInstance(mInstance);
 }
 
 //-----------------------------------------------
