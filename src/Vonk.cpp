@@ -56,10 +56,11 @@ Shader_t const &Vonk::getComputeShader(std::string const &name)
 
 //-----------------------------------------------
 
-void Vonk::addPipeline(PipelineData_t const &ci)
+void Vonk::addPipeline(DrawPipelineData_t const &ci)
 {
   mPipelinesCI.push_back(ci);
-  mPipelines.push_back(vonk::create::pipeline(
+  mPipelines.push_back(vonk::createPipeline(
+    {},
     mPipelinesCI.back(),
     mSwapChain,
     mDevice.handle,
@@ -139,7 +140,7 @@ void Vonk::drawFrame()
 
   // (2.3) Reset fences right before asking for draw
   vkResetFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame]);
-  VkCheck(vkQueueSubmit(mDevice.queues.graphics, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
+  VkCheck(vkQueueSubmit(mDevice.graphicsQ, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
 
   //=====
   //=====   3. DUMP TO SCREEN : Present Queue
@@ -157,7 +158,7 @@ void Vonk::drawFrame()
   };
 
   // (3.2) Ask for dump into screen
-  auto const presentRet = vkQueuePresentKHR(mDevice.queues.present, &presentInfo);
+  auto const presentRet = vkQueuePresentKHR(mDevice.presentQ, &presentInfo);
 
   // (3.3) Validate swapchain state
   if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vonk::window::framebufferResized) {
@@ -204,14 +205,13 @@ void Vonk::recreateSwapChain()
   vkDeviceWaitIdle(mDevice.handle);
 
   destroySwapChainDependencies();
-  mSwapChain = vonk::createSwapChain(mInstance, mGpu, mDevice, mSwapChain);
+  mSwapChain = vonk::createSwapChain(mDevice, mSwapChain);
 
   for (size_t i = 0; i < mPipelines.size(); ++i) {
     // vonk::createPipeline(mDevice, mSwapChain, mPipelines[i]);
     // auto &ci = mPipelinesCI[i];
-    vonk::create::pipelineRecreation(
+    vonk::createPipeline(
       mPipelines[i],
-      true,
       mPipelinesCI[i],
       mSwapChain,
       mDevice.handle,
@@ -231,13 +231,8 @@ void Vonk::recreateSwapChain()
 
 void Vonk::init()
 {
-  //=====
-  //=====   SETTINGS ¿?¿?¿?¿?¿?¿
-
-  if (!vonk::checkValidationLayersSupport(mInstance.layers)) {
-    Abort("Validation layers requested, but not available!");
-  }
-
+  // . Validation layers support
+  AbortIf(!vonk::checkValidationLayersSupport(mInstance.layers));
   // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
   mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
   // . Pick Gpu (aka: physical device)
@@ -245,7 +240,7 @@ void Vonk::init()
   // . Create Device (aka: gpu-manager / logical-device)
   mDevice = vonk::createDevice(mInstance, mGpu);
   // . Create SwapChain
-  mSwapChain = vonk::createSwapChain(mInstance, mGpu, mDevice, mSwapChain);
+  mSwapChain = vonk::createSwapChain(mDevice, mSwapChain);
 }
 
 //-----------------------------------------------
@@ -255,27 +250,17 @@ void Vonk::cleanup()
   // . Pipelines
 
   for (auto &pipeline : mPipelines) {
-    vkDestroyPipeline(mDevice.handle, pipeline.handle, nullptr);
-    vkDestroyPipelineLayout(mDevice.handle, pipeline.layout, nullptr);
-    if (pipeline.renderpass != mSwapChain.defaultRenderPass)
-      vkDestroyRenderPass(mDevice.handle, pipeline.renderpass, nullptr);
-    // vonk::destroyPipeline(pipeline, mDefaultRenderPass); // TODO
+    vonk::destroyPipeline(mDevice.handle, pipeline, mSwapChain.defaultRenderPass);  // TODO
   }
 
   // . Shaders
 
-  for (auto const &[k, ds] : mDrawShaders) {
-    vkDestroyShaderModule(mDevice.handle, ds.vert.module, nullptr);
-    vkDestroyShaderModule(mDevice.handle, ds.frag.module, nullptr);
-    // vkDestroyShaderModule(mDevice.handle, ds.tese.module, nullptr);
-    // vkDestroyShaderModule(mDevice.handle, ds.tesc.module, nullptr);
-    // vkDestroyShaderModule(mDevice.handle, ds.gemo.module, nullptr);
-  }
+  for (auto const &[k, ds] : mDrawShaders) { vonk::destroyDrawShader(mDevice.handle, ds); }
   for (auto const &[k, cs] : mComputeShaders) { vkDestroyShaderModule(mDevice.handle, cs.module, nullptr); }
 
-  // . Base
+  // . Context ¿?
 
-  vonk::destroySwapChain(mDevice, mSwapChain, false);
+  vonk::destroySwapChain(mSwapChain, false);
   vonk::destroyDevice(mDevice);
   vonk::destroyInstance(mInstance);
 }

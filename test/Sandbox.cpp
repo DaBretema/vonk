@@ -75,7 +75,7 @@ int main()
 
   vonk.init();
   MBU auto const &baseDrawShader = vonk.createDrawShader("base", "base", "base");
-  // MBU auto const &altDrawShader  = vonk.createDrawShader("withInputData", "base_2", "base");
+  MBU auto const &altDrawShader  = vonk.createDrawShader("withInputData", "base_2", "base");
 
   // .
   // . Setup
@@ -84,16 +84,16 @@ int main()
   //                                        { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
   //                                        { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } };
 
-  vonk::PipelineData_t const pipelineCI {
+  vonk::DrawPipelineData_t const pipelineCI {
     // Static
     .pDrawShader = &baseDrawShader,
     // Dynamic
     .commandBuffersData = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 6, 1, 0, 0); } } },
   };
 
-  vonk::PipelineData_t pipelineCI2 = pipelineCI;
-  pipelineCI2.pDrawShader          = &baseDrawShader,
-  pipelineCI2.commandBuffersData   = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 3, 1, 0, 0); } } },
+  vonk::DrawPipelineData_t pipelineCI2 = pipelineCI;
+  pipelineCI2.pDrawShader              = &baseDrawShader,
+  pipelineCI2.commandBuffersData       = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 3, 1, 0, 0); } } },
 
   vonk.addPipeline(pipelineCI);
   vonk.addPipeline(pipelineCI2);

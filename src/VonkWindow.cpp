@@ -18,7 +18,7 @@ void init(int32_t w_, int32_t h_, char const *title_)
   h     = h_;
   title = title_;
 
-  AbortIf(glfwInit());
+  AbortIf(!glfwInit());
   glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);     // Resize windows takes special care
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);  // Avoid OpenGL context creation
 

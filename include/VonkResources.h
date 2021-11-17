@@ -17,7 +17,7 @@ namespace vonk
 //-----------------------------------------------
 
 //
-// // === DEBUGGER : @DANI : Move to .cpp
+// // === DEBUGGERs : @DANI : Move to .cpp
 //
 
 //-----------------------------------------------
@@ -70,7 +70,7 @@ static inline VkDebugUtilsMessengerCreateInfoEXT sDebugMessengerCI {
 //-----------------------------------------------
 
 //
-// // === INSTANCE
+// // === INSTANCEs
 //
 
 //-----------------------------------------------
@@ -85,10 +85,7 @@ inline Instance_t createInstance(const char *title = "VONK", uint32_t apiVersion
   if (!instance.layers.empty()) { instance.exts.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME); }
 
   if (auto const windowExts = vonk::window::getInstanceExts(); !windowExts.empty()) {
-    // std::merge(instance.exts.begin(), instance.exts.end(),
-    // windowExts.begin(), windowExts.end(), instance.exts.end());
     instance.exts.insert(instance.exts.end(), windowExts.begin(), windowExts.end());
-    // for (auto &&ext : windowExts) { instance.exts.emplace_back(ext); }
   }
 
   // .. Of: App
@@ -140,7 +137,7 @@ inline void destroyInstance(Instance_t &instance)
 //-----------------------------------------------
 
 //
-// // === GPU (PHYSICAL DEVICE)
+// // === GPUs (PHYSICAL DEVICEs)
 //
 
 //-----------------------------------------------
@@ -177,13 +174,20 @@ inline Gpu_t pickGpu(
     gpu.surfSupp = vonk::getSurfaceSupport(gpu.handle, instance.surface);
 
     // . Queues Indices
-    // .. Get families
+
+    // ... Get families
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu.handle, &queueFamilyCount, nullptr);
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu.handle, &queueFamilyCount, queueFamilies.data());
-    // .. Get indices of them
-    bool hasGraphics = false, hasPresent = false, hasCompute = false, hasTransfer = false;
+
+    // ... Get indices of them : Only evaluate enabled ones
+
+    bool hasGraphics = !enableGraphics;
+    bool hasPresent  = !enablePresent;
+    bool hasCompute  = !enableCompute;
+    bool hasTransfer = !enableTransfer;
+
     for (uint32_t i = 0u; i < queueFamilies.size(); ++i) {
       auto const flags = queueFamilies.at(i).queueFlags;
 
@@ -191,34 +195,28 @@ inline Gpu_t pickGpu(
       vkGetPhysicalDeviceSurfaceSupportKHR(gpu.handle, i, instance.surface, &presentSupport);
 
       if (!hasGraphics and enableGraphics and (flags & VK_QUEUE_GRAPHICS_BIT)) {
-        hasGraphics          = true;
-        gpu.indices.graphics = i;
+        hasGraphics     = true;
+        gpu.graphicsIdx = i;
       }
       if (!hasPresent and enablePresent and presentSupport) {
-        auto const &G       = gpu.indices.graphics;
-        hasPresent          = (!G.has_value() || (G.has_value() and G.value() != i));  // Different from graphics
-        gpu.indices.present = i;
+        auto const &G  = gpu.graphicsIdx;
+        hasPresent     = (!G.has_value() || (G.has_value() and G.value() != i));  // Different from graphics
+        gpu.presentIdx = i;
       }
       if (!hasCompute and enableCompute and (flags & VK_QUEUE_COMPUTE_BIT)) {
-        hasCompute          = true;
-        gpu.indices.compute = i;
+        hasCompute     = true;
+        gpu.computeIdx = i;
       }
       if (!hasTransfer and enableTransfer and (flags & VK_QUEUE_TRANSFER_BIT)) {
-        hasTransfer          = true;
-        gpu.indices.transfer = i;
+        hasTransfer     = true;
+        gpu.transferIdx = i;
       }
       if (hasGraphics and hasPresent and hasCompute and hasTransfer) break;
     }
 
-    bool queueIndicesIsComplete = true;
-    if (enableGraphics) queueIndicesIsComplete &= gpu.indices.graphics.has_value();
-    if (enablePresent) queueIndicesIsComplete &= gpu.indices.present.has_value();
-    if (enableCompute) queueIndicesIsComplete &= gpu.indices.compute.has_value();
-    if (enableTransfer) queueIndicesIsComplete &= gpu.indices.transfer.has_value();
-
     // . Validate the gpu
     if (
-      !queueIndicesIsComplete  //
+      !(hasGraphics and gpu.presentIdx.has_value() and hasCompute and hasTransfer)  //
       or (gpu.surfSupp.presentModes.empty() or gpu.surfSupp.formats.empty())
       or !vonk::checkDeviceExtensionsSupport(gpu.handle, deviceExts)  //
     ) {
@@ -227,7 +225,7 @@ inline Gpu_t pickGpu(
 
     // . Get score from a valid gpu
     uint32_t const isDiscreteGPU = (gpu.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
-    uint32_t       score         = (1000 * isDiscreteGPU) + gpu.properties.limits.maxImageDimension2D;
+    uint32_t const score         = (1000 * isDiscreteGPU) + gpu.properties.limits.maxImageDimension2D;
 
     if (score > maxScore) {
       outGpu   = gpu;
@@ -237,20 +235,22 @@ inline Gpu_t pickGpu(
 
   LogInfof(
     "QUEUE INDICES -> g:{} p:{} c:{} t:{}",
-    outGpu.indices.graphics.has_value() ? fmt::to_string(outGpu.indices.graphics.value()) : "x",
-    outGpu.indices.present.has_value() ? fmt::to_string(outGpu.indices.present.value()) : "x",
-    outGpu.indices.compute.has_value() ? fmt::to_string(outGpu.indices.compute.value()) : "x",
-    outGpu.indices.transfer.has_value() ? fmt::to_string(outGpu.indices.transfer.value()) : "x");
+    outGpu.graphicsIdx.has_value() ? fmt::to_string(outGpu.graphicsIdx.value()) : "x",
+    outGpu.presentIdx.has_value() ? fmt::to_string(outGpu.presentIdx.value()) : "x",
+    outGpu.computeIdx.has_value() ? fmt::to_string(outGpu.computeIdx.value()) : "x",
+    outGpu.transferIdx.has_value() ? fmt::to_string(outGpu.transferIdx.value()) : "x");
 
   // . Return if valid gpu has been found
   if (maxScore < 1) { Abort("Suitable GPU not found!"); }
+
+  outGpu.pInstance = &instance;
   return outGpu;
 }
 
 //-----------------------------------------------
 
 //
-// // === DEVICE
+// // === DEVICEs
 //
 
 //-----------------------------------------------
@@ -260,18 +260,16 @@ inline Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   Device_t device;
 
   // . Queues' Create Infos
-  float const                          queuePriority = 1.0f;
-  std::vector<VkDeviceQueueCreateInfo> queueCIs;
-
   // NOTE: If graphics, compute or present queues comes from the same family
   // register it only once
-
+  float const                          queuePriority = 1.0f;
+  std::vector<VkDeviceQueueCreateInfo> queueCIs;
+  queueCIs.reserve(4);
   std::set<uint32_t> uniqueIndices {};
-  if (gpu.indices.graphics.has_value()) uniqueIndices.emplace(gpu.indices.graphics.value());
-  if (gpu.indices.compute.has_value()) uniqueIndices.emplace(gpu.indices.compute.value());
-  if (gpu.indices.transfer.has_value()) uniqueIndices.emplace(gpu.indices.transfer.value());
-  if (gpu.indices.present.has_value()) uniqueIndices.emplace(gpu.indices.present.value());
-
+  if (gpu.graphicsIdx.has_value()) uniqueIndices.emplace(gpu.graphicsIdx.value());
+  if (gpu.computeIdx.has_value()) uniqueIndices.emplace(gpu.computeIdx.value());
+  if (gpu.transferIdx.has_value()) uniqueIndices.emplace(gpu.transferIdx.value());
+  if (gpu.presentIdx.has_value()) uniqueIndices.emplace(gpu.presentIdx.value());
   for (uint32_t queueFamily : uniqueIndices) {
     queueCIs.push_back(VkDeviceQueueCreateInfo {
       .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -297,23 +295,19 @@ inline Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   VkCheck(vkCreateDevice(gpu.handle, &deviceCI, nullptr, &device.handle));
 
   // . Pick required queues
-  if (gpu.indices.graphics.has_value())
-    vkGetDeviceQueue(device.handle, gpu.indices.graphics.value(), 0, &device.queues.graphics);
-  if (gpu.indices.compute.has_value())
-    vkGetDeviceQueue(device.handle, gpu.indices.compute.value(), 0, &device.queues.compute);
-  if (gpu.indices.transfer.has_value())
-    vkGetDeviceQueue(device.handle, gpu.indices.transfer.value(), 0, &device.queues.transfer);
-  if (gpu.indices.present.has_value())
-    vkGetDeviceQueue(device.handle, gpu.indices.present.value(), 0, &device.queues.present);
-  device.indices = gpu.indices;
+  if (gpu.graphicsIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.graphicsIdx.value(), 0, &device.graphicsQ);
+  if (gpu.computeIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.computeIdx.value(), 0, &device.computeQ);
+  if (gpu.transferIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.transferIdx.value(), 0, &device.transferQ);
+  if (gpu.presentIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.presentIdx.value(), 0, &device.presentQ);
 
-  // . Command Pool :  Maybe move this out and create one per thread
+  // . Command Pool :  Maybe move this out and create one per thread ¿?
   VkCommandPoolCreateInfo const commandPoolCI {
     .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .queueFamilyIndex = gpu.indices.graphics.value(),
+    .queueFamilyIndex = gpu.graphicsIdx.value(),
   };
   VkCheck(vkCreateCommandPool(device.handle, &commandPoolCI, nullptr, &device.commandPool));
 
+  device.pGpu = &gpu;
   return device;
 }
 
@@ -329,7 +323,7 @@ inline void destroyDevice(Device_t &device)
 //-----------------------------------------------
 
 //
-// // === RENDER PASS
+// // === RENDER PASSes
 //
 
 //-----------------------------------------------
@@ -434,7 +428,7 @@ inline VkRenderPass createDefaultRenderPass(VkDevice device, VkFormat colorForma
 //-----------------------------------------------
 
 //
-// // === TEXTURE
+// // === TEXTUREs
 //
 
 //-----------------------------------------------
@@ -510,7 +504,7 @@ inline bool isEmptyTexture(Texture_t const &tex) { return !tex.view or !tex.memo
 //-----------------------------------------------
 
 //
-// // === SEMAPHORES
+// // === SEMAPHOREs
 //
 
 //-----------------------------------------------
@@ -531,7 +525,7 @@ inline VkSemaphore createSemaphore(VkDevice device)
 //-----------------------------------------------
 
 //
-// // === FENCES
+// // === FENCEs
 //
 
 //-----------------------------------------------
@@ -558,8 +552,10 @@ inline VkFence createFence(VkDevice device)
 
 //-----------------------------------------------
 
-inline void destroySwapChain(Device_t const &device, SwapChain_t const &swapchain, bool justForRecreation = false)
+inline void destroySwapChain(SwapChain_t &swapchain, bool justForRecreation = false)
 {
+  Device_t const &device = *swapchain.pDevice;
+
   // . Defaults : DepthTexture, FrameBuffers, ImageViews
   vonk::destroyTexture(device.handle, swapchain.defaultDepthTexture);
   for (auto framebuffer : swapchain.defaultFrameBuffers) { vkDestroyFramebuffer(device.handle, framebuffer, nullptr); }
@@ -580,18 +576,22 @@ inline void destroySwapChain(Device_t const &device, SwapChain_t const &swapchai
     vkDestroySemaphore(device.handle, swapchain.semaphores.present[i], nullptr);
     vkDestroyFence(device.handle, swapchain.fences.submit[i], nullptr);
   }
+
+  swapchain = SwapChain_t {};
 }
 
 //-----------------------------------------------
 
-inline SwapChain_t
-  createSwapChain(Instance_t const &instance, Gpu_t const &gpu, Device_t const &device, SwapChain_t oldSwapChain)
+inline SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
 {
+  auto const &gpu      = *device.pGpu;
+  auto const &instance = *gpu.pInstance;
+
   VkSwapchainKHR oldSwapChainHandle = oldSwapChain.handle;
   SwapChain_t    swapchain          = std::move(oldSwapChain);
 
-  bool const        gpDiffQueue = device.queues.graphics != device.queues.present;
-  std::vector const gpIndices   = { device.indices.graphics.value(), device.indices.present.value() };
+  bool const        gpDiffQueue = device.graphicsQ != device.presentQ;
+  std::vector const gpIndices   = { device.pGpu->graphicsIdx.value(), device.pGpu->presentIdx.value() };
 
   // . Get supported settings
   auto const &SS  = gpu.surfSupp;
@@ -704,7 +704,7 @@ inline SwapChain_t
 
   // . If an existing swap chain is re-created, destroy the old image-views
   //    [and swap-chain : This also cleans up all the presentable images ¿?¿?¿?]
-  if (oldSwapChainHandle != VK_NULL_HANDLE) { destroySwapChain(device, swapchain, true); }
+  if (oldSwapChainHandle != VK_NULL_HANDLE) { destroySwapChain(swapchain, true); }
 
   // . Get Image-Views for that Images
   swapchain.views.resize(swapchain.images.size());
@@ -777,13 +777,14 @@ inline SwapChain_t
     }
   }
 
+  swapchain.pDevice = &device;
   return swapchain;
 }
 
 //-----------------------------------------------
 
 //
-// // === SHADERS
+// // === SHADERs
 //
 
 //-----------------------------------------------
@@ -796,9 +797,9 @@ inline Shader_t createShader(VkDevice device, std::string const &name, VkShaderS
     { VK_SHADER_STAGE_VERTEX_BIT, "vert" },
     { VK_SHADER_STAGE_FRAGMENT_BIT, "frag" },
     { VK_SHADER_STAGE_COMPUTE_BIT, "comp" },
-    { VK_SHADER_STAGE_GEOMETRY_BIT, "geom" },
     { VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, "tesc" },
     { VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, "tese" },
+    { VK_SHADER_STAGE_GEOMETRY_BIT, "geom" },
   };
   static auto const sShadersPath = std::string("./assets/shaders/");  // get this path from #define
 
@@ -808,7 +809,7 @@ inline Shader_t createShader(VkDevice device, std::string const &name, VkShaderS
 #if VONK_SHADER_CACHE
   //  NOTE: Temporary disabled due to requirement of ref_counting system to avoid destoy
   //  the shadermodule if other item is using it from the cache.
-  static std::unordered_map<std::string, ShaderData> cache = {};
+  static std::unordered_map<std::string, Shader_t> cache = {};
   if (cache.count(path) > 0) {
     LogInfo("CACHED!!!");
     return cache.at(path);
@@ -827,6 +828,7 @@ inline Shader_t createShader(VkDevice device, std::string const &name, VkShaderS
   VkShaderModule shadermodule;
   VkCheck(vkCreateShaderModule(device, &shadermoduleCI, nullptr, &shadermodule));
 
+  // . This is the thing that pipelines need
   VkPipelineShaderStageCreateInfo const shaderStageCI {
     .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
     .stage  = stage,
@@ -845,52 +847,72 @@ inline Shader_t createShader(VkDevice device, std::string const &name, VkShaderS
 
 //-----------------------------------------------
 
+inline DrawShader_t createDrawShader(
+  Device_t const &   device,
+  std::string const &vert,
+  std::string const &frag,
+  std::string const &tesc,
+  std::string const &tese,
+  std::string const &geom)
+{
+  DrawShader_t ds;
+
+  Assert(!vert.empty() and !frag.empty());
+  ds.vert = vonk::createShader(device.handle, vert, VK_SHADER_STAGE_VERTEX_BIT);
+  ds.frag = vonk::createShader(device.handle, frag, VK_SHADER_STAGE_FRAGMENT_BIT);
+
+  if (!tesc.empty() or !tesc.empty()) {
+    Assert(!tesc.empty() and !tesc.empty() and device.pGpu->features.tessellationShader);
+    ds.tesc = vonk::createShader(device.handle, tesc, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+    ds.tese = vonk::createShader(device.handle, tese, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+  }
+
+  if (!geom.empty()) {
+    Assert(device.pGpu->features.geometryShader);
+    ds.geom = vonk::createShader(device.handle, geom, VK_SHADER_STAGE_GEOMETRY_BIT);
+  }
+
+  return ds;
+}
+
+//-----------------------------------------------
+
+inline void destroyDrawShader(VkDevice device, DrawShader_t const &ds)
+{
+  vkDestroyShaderModule(device, ds.vert.module, nullptr);
+  vkDestroyShaderModule(device, ds.frag.module, nullptr);
+  vkDestroyShaderModule(device, ds.tesc.module, nullptr);
+  vkDestroyShaderModule(device, ds.tese.module, nullptr);
+  vkDestroyShaderModule(device, ds.geom.module, nullptr);
+}
+
+//-----------------------------------------------
+
 // inline void destroyShader(VkDevice device, Shader_t const &shader) {}
 
 //-----------------------------------------------
 
-}  // namespace vonk
-
-namespace vonk::create
-{  //
-
-//-----------------------------------------------
+//
+// // === PIPELINEs
+//
 
 //-----------------------------------------------
 
-//-----------------------------------------------
-
-//-----------------------------------------------
-
-inline void pipelineRecreation(
-  Pipeline_t &               pipeline,
-  bool                       onlyRecreateImageViewDependencies,
-  PipelineData_t             ci,
-  SwapChain_t const &        swapchain,
-  VkDevice                   device,
-  VkCommandPool              commandPool,
-  VkRenderPass               renderpass,
-  std::vector<VkFramebuffer> frameBuffers)
+inline DrawPipeline_t createPipeline(
+  DrawPipeline_t const &            oldPipeline,
+  DrawPipelineData_t const &        ci,
+  SwapChain_t const &               swapchain,
+  VkDevice                          device,
+  VkCommandPool                     commandPool,
+  VkRenderPass                      renderpass,
+  std::vector<VkFramebuffer> const &frameBuffers)
 {
-  /*
+  auto const     oldPipelineHandle = oldPipeline.handle;
+  DrawPipeline_t pipeline          = std::move(oldPipeline);
 
-// Separated logic
-  auto const createPipeline = [&]() {
+  // Pipeline !
 
-  };
-  auto const createCommands = [&]() {
-
-  };
-
-// Behaviour
-  if(!onlyRecreateImageViewDependencies) {
-    createPipeline();
-  }
-  createCommands();
-
-*/
-
-  if (!onlyRecreateImageViewDependencies) {
+  auto const createPipeline_pipeline = [&]() {
     // . FIXED FUNCS - Rasterization
     VkPipelineRasterizationStateCreateInfo const rasterizationStateCI = {
       .sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -932,6 +954,7 @@ inline void pipelineRecreation(
     pipeline.renderpass = renderpass;  // renderpass(device, ci.renderPassData);
 
     // . Shaders : @DANI : Improve : Write ONLY present shaders, i.e. avoid register tess if it's no present.
+    pipeline.stagesCI.reserve(8);
     pipeline.stagesCI.emplace_back(ci.pDrawShader->vert.stageCI);
     pipeline.stagesCI.emplace_back(ci.pDrawShader->frag.stageCI);
 
@@ -976,113 +999,115 @@ inline void pipelineRecreation(
       .basePipelineIndex   = -1,              // Optional
     };
     VkCheck(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphicsPipelineCI, nullptr, &pipeline.handle));
-  }
-
-  // . Set Viewports and Scissors.
-  // NOTE_1: If the Viewport size is negative, read it as percentage of current
-  // swapchain-size NOTE_2: If the Scissor size is UINT32_MAX, set the current
-  // swapchain-size
-  float const             swapH = swapchain.extent2D.height;
-  float const             swapW = swapchain.extent2D.width;
-  std::vector<VkViewport> viewports;
-  for (auto &viewport : ci.viewports) {
-    auto &v = viewports.emplace_back(viewport);
-    if (v.x < 0) { v.x = swapW * (-viewport.x * 0.005f); }
-    if (v.y < 0) { v.y = swapH * (-viewport.y * 0.005f); }
-    if (v.width < 0) { v.width = swapW * (-viewport.width * 0.01f); }
-    if (v.height < 0) { v.height = swapH * (-viewport.height * 0.01f); }
-  }
-  std::vector<VkRect2D> scissors;
-  for (auto &scissor : ci.scissors) {
-    auto &s = scissors.emplace_back(scissor);
-    if (s.extent.height == UINT32_MAX) { s.extent.height = swapH; }
-    if (s.extent.width == UINT32_MAX) { s.extent.width = swapW; }
-  }
-
-  // // . Set framebuffers
-  // if (useAsOutput) {
-  //   pipeline.frameBuffers.resize(swapchain.views.size());
-  //   for (size_t i = 0; i < swapchain.views.size(); ++i) {
-  //     VkImageView const             attachments[] = { swapchain.views[i] };
-  //     VkFramebufferCreateInfo const framebufferCI {
-  //       .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-  //       .renderPass      = pipeline.renderpass,
-  //       .attachmentCount = 1,  // Modify this for MRT ??
-  //       .pAttachments    = attachments,
-  //       .width           = swapchain.settings.extent2D.width,
-  //       .height          = swapchain.settings.extent2D.height,
-  //       .layers          = 1,
-  //     };
-  //     VkCheck(vkCreateFramebuffer(device, &framebufferCI, nullptr,
-  //     &pipeline.frameBuffers[i]));
-  //   }
-  // }
-
-  // . Commad Buffers Allocation
-  pipeline.commandBuffers.resize(frameBuffers.size() /* pipeline.frameBuffers.size() */);
-  VkCommandBufferAllocateInfo const commandBufferAllocInfo {
-    .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool        = commandPool,
-    .commandBufferCount = GetSizeU32(pipeline.commandBuffers),
-    .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
   };
-  VkCheck(vkAllocateCommandBuffers(device, &commandBufferAllocInfo, GetData(pipeline.commandBuffers)));
 
-  // . Commad Buffers Recording
-  for (auto const &commandBuffesData : ci.commandBuffersData) {
-    VkCommandBufferBeginInfo const commandBufferBI {
-      .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,  // @DANI : Review
-      .pInheritanceInfo = nullptr,                                       // Optional
-    };
+  // Commands !
 
-    std::vector<VkClearValue> const clearValues { { .color = commandBuffesData.clearColor },
-                                                  { .depthStencil = commandBuffesData.clearDephtStencil } };
-
-    VkRenderPassBeginInfo renderpassBI {
-      .sType      = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-      .renderPass = pipeline.renderpass,  // with multiple renderpasses:
-      // commandBuffesData.renderPassIdx
-      .clearValueCount = GetSizeU32(clearValues),
-      .pClearValues    = GetData(clearValues),
-      // ?? Use this both for blitting.
-      .renderArea.offset = { 0, 0 },
-      .renderArea.extent = swapchain.extent2D,
-    };
-
-    for (size_t i = 0; i < pipeline.commandBuffers.size(); ++i) {
-      auto const commandBuffer = pipeline.commandBuffers[i];
-      renderpassBI.framebuffer = frameBuffers.at(i);  // pipeline.frameBuffers[i];
-      VkCheck(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
-      vkCmdBeginRenderPass(commandBuffer, &renderpassBI, VK_SUBPASS_CONTENTS_INLINE);
-      vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-      vkCmdSetViewport(commandBuffer, 0, GetSizeU32(viewports),
-                       GetData(viewports));  // Dynamic Viewport
-      vkCmdSetScissor(commandBuffer, 0, GetSizeU32(scissors),
-                      GetData(scissors));  // Dynamic Scissors
-      if (commandBuffesData.commands) { commandBuffesData.commands(commandBuffer); }
-      vkCmdEndRenderPass(commandBuffer);
-      VkCheck(vkEndCommandBuffer(commandBuffer));
+  auto const createPipeline_commands = [&]() {
+    // . Set Viewports and Scissors.
+    // NOTE_1: If the Viewport size is negative, read it as percentage of current swapchain-size
+    // NOTE_2: If the Scissor size is UINT32_MAX, set the current swapchain-size
+    float const             swapH = swapchain.extent2D.height;
+    float const             swapW = swapchain.extent2D.width;
+    std::vector<VkViewport> viewports;
+    viewports.reserve(ci.viewports.size());
+    for (auto const &viewport : ci.viewports) {
+      auto &v = viewports.emplace_back(viewport);
+      if (v.x < 0) { v.x = swapW * (-viewport.x * 0.005f); }
+      if (v.y < 0) { v.y = swapH * (-viewport.y * 0.005f); }
+      if (v.width < 0) { v.width = swapW * (-viewport.width * 0.01f); }
+      if (v.height < 0) { v.height = swapH * (-viewport.height * 0.01f); }
     }
-  }
-}
+    std::vector<VkRect2D> scissors;
+    scissors.reserve(ci.scissors.size());
+    for (auto const &scissor : ci.scissors) {
+      auto &s = scissors.emplace_back(scissor);
+      if (s.extent.height == UINT32_MAX) { s.extent.height = swapH; }
+      if (s.extent.width == UINT32_MAX) { s.extent.width = swapW; }
+    }
 
-//-----------------------------------------------
+    // // . Set framebuffers
+    // if (useAsOutput) {
+    //   pipeline.frameBuffers.resize(swapchain.views.size());
+    //   for (size_t i = 0; i < swapchain.views.size(); ++i) {
+    //     VkImageView const             attachments[] = { swapchain.views[i] };
+    //     VkFramebufferCreateInfo const framebufferCI {
+    //       .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+    //       .renderPass      = pipeline.renderpass,
+    //       .attachmentCount = 1,  // Modify this for MRT ??
+    //       .pAttachments    = attachments,
+    //       .width           = swapchain.settings.extent2D.width,
+    //       .height          = swapchain.settings.extent2D.height,
+    //       .layers          = 1,
+    //     };
+    //     VkCheck(vkCreateFramebuffer(device, &framebufferCI, nullptr,
+    //     &pipeline.frameBuffers[i]));
+    //   }
+    // }
 
-inline Pipeline_t pipeline(
-  PipelineData_t             ci,
-  SwapChain_t const &        swapchain,
-  VkDevice                   device,
-  VkCommandPool              commandPool,
-  VkRenderPass               renderpass,
-  std::vector<VkFramebuffer> frameBuffers)
-{
-  Pipeline_t pipeline;
-  pipelineRecreation(pipeline, false, ci, swapchain, device, commandPool, renderpass, frameBuffers);
+    // . Commad Buffers Allocation
+    pipeline.commandBuffers.resize(frameBuffers.size() /* pipeline.frameBuffers.size() */);
+    VkCommandBufferAllocateInfo const commandBufferAllocInfo {
+      .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool        = commandPool,
+      .commandBufferCount = GetSizeU32(pipeline.commandBuffers),
+      .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    };
+    VkCheck(vkAllocateCommandBuffers(device, &commandBufferAllocInfo, GetData(pipeline.commandBuffers)));
+
+    // . Commad Buffers Recording
+    for (auto const &commandBuffesData : ci.commandBuffersData) {
+      VkCommandBufferBeginInfo const commandBufferBI {
+        .sType            = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags            = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,  // @DANI : Review
+        .pInheritanceInfo = nullptr,                                       // Optional
+      };
+
+      std::vector<VkClearValue> const clearValues { { .color = commandBuffesData.clearColor },
+                                                    { .depthStencil = commandBuffesData.clearDephtStencil } };
+
+      VkRenderPassBeginInfo renderpassBI {
+        .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass      = pipeline.renderpass,  // with multiple renderpasses use commandBuffesData.renderPassIdx
+        .clearValueCount = GetSizeU32(clearValues),
+        .pClearValues    = GetData(clearValues),
+        // ?? Use this both for blitting.
+        .renderArea.offset = { 0, 0 },
+        .renderArea.extent = swapchain.extent2D,
+      };
+
+      for (size_t i = 0; i < pipeline.commandBuffers.size(); ++i) {
+        auto const commandBuffer = pipeline.commandBuffers[i];
+        renderpassBI.framebuffer = frameBuffers.at(i);  // pipeline.frameBuffers[i];
+        VkCheck(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
+        vkCmdBeginRenderPass(commandBuffer, &renderpassBI, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
+        vkCmdSetViewport(commandBuffer, 0, GetSizeU32(viewports),
+                         GetData(viewports));  // Dynamic Viewport
+        vkCmdSetScissor(commandBuffer, 0, GetSizeU32(scissors),
+                        GetData(scissors));  // Dynamic Scissors
+        if (commandBuffesData.commands) { commandBuffesData.commands(commandBuffer); }
+        vkCmdEndRenderPass(commandBuffer);
+        VkCheck(vkEndCommandBuffer(commandBuffer));
+      }
+    }
+  };
+
+  if (oldPipelineHandle == VK_NULL_HANDLE) { createPipeline_pipeline(); }
+  createPipeline_commands();
 
   return pipeline;
 }
 
 //-----------------------------------------------
 
-}  // namespace vonk::create
+inline void destroyPipeline(VkDevice device, DrawPipeline_t const &pipeline, VkRenderPass defaultRenderPass)
+{
+  vkDestroyPipeline(device, pipeline.handle, nullptr);
+  vkDestroyPipelineLayout(device, pipeline.layout, nullptr);
+  if (pipeline.renderpass != defaultRenderPass) vkDestroyRenderPass(device, pipeline.renderpass, nullptr);
+}
+
+//-----------------------------------------------
+
+}  // namespace vonk

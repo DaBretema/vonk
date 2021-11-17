@@ -18,7 +18,7 @@ public:
   void cleanup();
   void drawFrame();
   void waitDevice();
-  void addPipeline(PipelineData_t const &ci);
+  void addPipeline(DrawPipelineData_t const &ci);
 
   inline auto currentFormat() const { return mSwapChain.colorFormat; }
 
@@ -35,6 +35,8 @@ private:
   void recreateSwapChain();
   void destroySwapChainDependencies();
 
+  // . Context
+
   Instance_t  mInstance;
   Gpu_t       mGpu;
   Device_t    mDevice;
@@ -43,14 +45,14 @@ private:
   std::unordered_map<std::string, DrawShader_t> mDrawShaders;
   std::unordered_map<std::string, Shader_t>     mComputeShaders;
 
-  std::vector<Pipeline_t>     mPipelines;
-  std::vector<PipelineData_t> mPipelinesCI;
-  uint32_t                    mActivePipeline = 0u;
+  std::vector<DrawPipeline_t>     mPipelines;
+  std::vector<DrawPipelineData_t> mPipelinesCI;
+  uint32_t                        mActivePipeline = 0u;
 
   // Settings:
   uint32_t sInFlightMaxFrames = 3;
 
   // Resources:
 
-};  // class Vonk
+};  // class Context
 }  // namespace vonk

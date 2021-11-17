@@ -11,17 +11,6 @@ namespace vonk
 
 //-----------------------------------------------
 
-struct QueueIndices_t
-{
-  std::optional<uint32_t> graphics = {}, present = {}, compute = {}, transfer = {};
-};
-struct Queues_t
-{
-  VkQueue graphics, present, compute, transfer;
-};
-
-//-----------------------------------------------
-
 struct SurfaceSupport_t
 {
   VkSurfaceCapabilitiesKHR        caps;
@@ -29,23 +18,6 @@ struct SurfaceSupport_t
   std::vector<VkPresentModeKHR>   presentModes;
   VkFormat                        depthFormat;
 };
-
-//-----------------------------------------------
-
-// struct SwapShainSettings_t
-// {
-//   bool vsync = true;
-
-//   VkExtent2D                    extent2D             = { 1280, 720 };
-//   VkPresentModeKHR              presentMode          = VK_PRESENT_MODE_FIFO_KHR;
-//   uint32_t                      minImageCount        = 0u;
-//   VkFormat                      depthFormat          = VK_FORMAT_UNDEFINED;
-//   VkFormat                      colorFormat          = VK_FORMAT_B8G8R8A8_SRGB;
-//   VkColorSpaceKHR               colorSpace           = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-//   VkSurfaceTransformFlagBitsKHR preTransformFlag     = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-//   VkCompositeAlphaFlagBitsKHR   compositeAlphaFlag   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-//   VkImageUsageFlags             extraImageUsageFlags = {};
-// };
 
 //-----------------------------------------------
 
@@ -65,30 +37,26 @@ struct Gpu_t
 {
   VkPhysicalDevice handle = VK_NULL_HANDLE;
 
+  SurfaceSupport_t                 surfSupp;
   VkPhysicalDeviceMemoryProperties memory;
   VkPhysicalDeviceFeatures         features;
   VkPhysicalDeviceProperties       properties;
+  std::optional<uint32_t>          graphicsIdx = {}, presentIdx = {}, computeIdx = {}, transferIdx = {};
 
-  SurfaceSupport_t surfSupp;
-  QueueIndices_t   indices;
-
-  Instance_t *pInstance;
+  Instance_t const *pInstance = nullptr;
 };
 
 //-----------------------------------------------
 
 struct Device_t
 {
-  VkDevice handle = VK_NULL_HANDLE;
-
-  Queues_t       queues;
-  QueueIndices_t indices;
-
+  VkDevice      handle      = VK_NULL_HANDLE;
   VkCommandPool commandPool = VK_NULL_HANDLE;
+  VkQueue       graphicsQ, presentQ, computeQ, transferQ;
 
   std::vector<const char *> exts = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-  Gpu_t *pGpu;
+  Gpu_t const *pGpu = nullptr;
 };
 
 //-----------------------------------------------
@@ -104,8 +72,7 @@ struct Texture_t
 
 struct SwapChain_t
 {
-  VkSwapchainKHR handle = VK_NULL_HANDLE;
-  // SwapShainSettings_t      settings;
+  VkSwapchainKHR           handle = VK_NULL_HANDLE;
   std::vector<VkImage>     images;
   std::vector<VkImageView> views;
 
@@ -113,7 +80,7 @@ struct SwapChain_t
   Texture_t                  defaultDepthTexture;
   VkRenderPass               defaultRenderPass = VK_NULL_HANDLE;
 
-  bool vsync = true;
+  bool vsync = true;  // ! This may come from settings
 
   VkExtent2D                    extent2D             = { 1280, 720 };
   VkPresentModeKHR              presentMode          = VK_PRESENT_MODE_FIFO_KHR;
@@ -138,12 +105,16 @@ struct SwapChain_t
   } fences;
 
   static constexpr uint32_t sInFlightMaxFrames = 3;
+
+  Device_t const *pDevice = nullptr;
 };
 
 //-----------------------------------------------
 
 uint32_t constexpr VONK_COLOR_COMPONENT_RGBA_BIT =
   VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+//-----------------------------------------------
 
 namespace BlendType
 {
@@ -228,18 +199,20 @@ struct Shader_t
   VkPipelineShaderStageCreateInfo stageCI;
 };
 
+//-----------------------------------------------
+
 struct DrawShader_t
 {
   Shader_t vert;
   Shader_t frag;
-  // Shader_t tese;
-  // Shader_t tesc;
-  // Shader_t geom;
+  Shader_t tesc;
+  Shader_t tese;
+  Shader_t geom;
 };
 
-using ComputeShader_t = Shader_t;
+//-----------------------------------------------
 
-// using ShadersData_t = std::vector<std::pair<std::string, VkShaderStageFlagBits>>;
+using ComputeShader_t = Shader_t;
 
 //-----------------------------------------------
 
@@ -271,7 +244,9 @@ struct PipelineLayoutData_t
   };
 };
 
-struct PipelineData_t
+//-----------------------------------------------
+
+struct DrawPipelineData_t
 {
   // . Static
   VkPolygonMode         ffPolygonMode       = VK_POLYGON_MODE_FILL;
@@ -280,7 +255,7 @@ struct PipelineData_t
   VkSampleCountFlagBits ffSamples           = VK_SAMPLE_COUNT_1_BIT;
   VkCompareOp           ffDepthOp           = VK_COMPARE_OP_LESS;
 
-  DrawShader_t const *pDrawShader;
+  DrawShader_t const *pDrawShader = nullptr;
   // ComputeShader_t *    pComputeShader;
   RenderPassData_t     renderPassData;
   PipelineLayoutData_t pipelineLayoutData;
@@ -301,7 +276,9 @@ struct PipelineData_t
   CommandBuffersData_t    commandBuffersData;
 };
 
-struct Pipeline_t  // @DANI Change this to DrawPipeline_t and create ComputePipeline_t
+//-----------------------------------------------
+
+struct DrawPipeline_t  // @DANI Change this to DrawPipeline_t and create ComputePipeline_t
 {
   VkPipeline handle = VK_NULL_HANDLE;
   // . Static
