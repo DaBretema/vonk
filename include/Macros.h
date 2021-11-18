@@ -45,11 +45,14 @@
 //-----------------------------------------------
 
 // Evaluate critical condition
+
 #define AbortIf(conditionCode) \
   if (conditionCode) { Abort(#conditionCode); }
 
-// Evaluate critical condition
-#define AbortIff(conditionCode, msg, ...) \
+#define AbortIfMsg(conditionCode, msg) \
+  if (conditionCode) { Abortf("{} --> {}", #conditionCode, msg); }
+
+#define AbortIfMsgf(conditionCode, msg, ...) \
   if (conditionCode) { Abortf("{} --> {}", #conditionCode, fmt::format(msg, __VA_ARGS__)); }
 
 //-----------------------------------------------

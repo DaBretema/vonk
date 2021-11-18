@@ -28,7 +28,7 @@ DrawShader_t const &
 
 DrawShader_t const &Vonk::getDrawShader(std::string const &keyName)
 {
-  AbortIf(mDrawShaders.count(keyName) < 1);
+  AbortIfMsg(mDrawShaders.count(keyName) < 1, "Draw Shader Not Found!");
   return mDrawShaders[keyName];
 }
 
@@ -44,7 +44,7 @@ Shader_t const &Vonk::createComputeShader(std::string const &name)
 
 Shader_t const &Vonk::getComputeShader(std::string const &name)
 {
-  AbortIf(mComputeShaders.count(name) < 1);
+  AbortIfMsg(mComputeShaders.count(name) < 1, "Compute Shader Not Found!");
   return mComputeShaders[name];
 }
 
@@ -208,8 +208,7 @@ void Vonk::recreateSwapChain()
   mSwapChain = vonk::createSwapChain(mDevice, mSwapChain);
 
   for (size_t i = 0; i < mPipelines.size(); ++i) {
-    // vonk::createPipeline(mDevice, mSwapChain, mPipelines[i]);
-    // auto &ci = mPipelinesCI[i];
+    // vonk::createPipeline(mDevice, mPipelines[i], currSwapChainExtent2D, [renderpass], [framebuffer]);
     vonk::createPipeline(
       mPipelines[i],
       mPipelinesCI[i],
@@ -232,11 +231,11 @@ void Vonk::recreateSwapChain()
 void Vonk::init()
 {
   // . Validation layers support
-  AbortIf(!vonk::checkValidationLayersSupport(mInstance.layers));
+  AbortIfMsg(!vonk::checkValidationLayersSupport(mInstance.layers), "Required Layers Not Found!");
   // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
   mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
   // . Pick Gpu (aka: physical device)
-  mGpu = vonk::pickGpu(mInstance, mDevice.exts, true, true, false, false);
+  mGpu = vonk::pickGpu(mInstance, true, true, false, false);
   // . Create Device (aka: gpu-manager / logical-device)
   mDevice = vonk::createDevice(mInstance, mGpu);
   // . Create SwapChain
@@ -249,9 +248,7 @@ void Vonk::cleanup()
 {
   // . Pipelines
 
-  for (auto &pipeline : mPipelines) {
-    vonk::destroyPipeline(mDevice.handle, pipeline, mSwapChain.defaultRenderPass);  // TODO
-  }
+  for (auto &pipeline : mPipelines) { vonk::destroyPipeline(mSwapChain, pipeline); }
 
   // . Shaders
 

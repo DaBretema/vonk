@@ -43,6 +43,8 @@ struct Gpu_t
   VkPhysicalDeviceProperties       properties;
   std::optional<uint32_t>          graphicsIdx = {}, presentIdx = {}, computeIdx = {}, transferIdx = {};
 
+  std::vector<const char *> exts = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
   Instance_t const *pInstance = nullptr;
 };
 
@@ -53,8 +55,6 @@ struct Device_t
   VkDevice      handle      = VK_NULL_HANDLE;
   VkCommandPool commandPool = VK_NULL_HANDLE;
   VkQueue       graphicsQ, presentQ, computeQ, transferQ;
-
-  std::vector<const char *> exts = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
   Gpu_t const *pGpu = nullptr;
 };

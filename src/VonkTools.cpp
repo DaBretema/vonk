@@ -62,17 +62,18 @@ SurfaceSupport_t getSurfaceSupport(VkPhysicalDevice gpu, VkSurfaceKHR surface)
 
 //-----------------------------------------------
 
-bool checkDeviceExtensionsSupport(VkPhysicalDevice physicalDevice, std::vector<char const *> const &exts)
+bool checkGpuExtensionsSupport(Gpu_t const &gpu)
 {
-  if (exts.empty()) return true;
+  if (gpu.exts.empty()) return true;
 
   uint32_t count;
-  vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+  vkEnumerateDeviceExtensionProperties(gpu.handle, nullptr, &count, nullptr);
   std::vector<VkExtensionProperties> available(count);
-  vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, available.data());
+  vkEnumerateDeviceExtensionProperties(gpu.handle, nullptr, &count, available.data());
 
-  std::set<std::string> required(exts.begin(), exts.end());
+  std::set<std::string> required(gpu.exts.begin(), gpu.exts.end());
   for (const auto &item : available) { required.erase(item.extensionName); }
+
   return required.empty();
 }
 
