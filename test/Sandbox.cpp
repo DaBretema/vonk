@@ -3,54 +3,6 @@
 
 #include "_glm.h"
 
-// === Temporary code
-//=====================================================================================================================
-
-// struct Vertex
-// {
-//   glm::vec3 pos;
-//   glm::vec3 color;
-
-//   static VkVertexInputBindingDescription getBindingDescription()
-//   {
-//     VkVertexInputBindingDescription bindingDescription {};
-//     bindingDescription.binding   = 0;
-//     bindingDescription.stride    = sizeof(Vertex);
-//     bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-//     return bindingDescription;
-//   }
-
-//   static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
-//   {
-//     std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions {};
-//     attributeDescriptions[0].binding  = 0;
-//     attributeDescriptions[0].location = 0;
-//     attributeDescriptions[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
-//     attributeDescriptions[0].offset   = offsetof(Vertex, pos);
-//     attributeDescriptions[1].binding  = 0;
-//     attributeDescriptions[1].location = 1;
-//     attributeDescriptions[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-//     attributeDescriptions[1].offset   = offsetof(Vertex, color);
-//     return attributeDescriptions;
-//   }
-// };
-
-// void createVertexBuffer(VkDevice device, std::vector<Vertex> vertices)
-// {
-//   VkBufferCreateInfo bufferInfo {};
-//   bufferInfo.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-//   bufferInfo.size        = sizeof(Vertex) * GetSizeU32(vertices);
-//   bufferInfo.usage       = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-//   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-//   VkBuffer vertexBuffer;
-//   VkCheck(vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer));
-
-//   return vertexBuffer;
-// }
-
-//=====================================================================================================================
-
 int main()
 {
   vonk::Vonk vonk;
@@ -80,20 +32,22 @@ int main()
   // .
   // . Setup
 
-  // const std::vector<Vertex> vertices = { { { 0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-  //                                        { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-  //                                        { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } };
-
+  // ::: Scene 1
   vonk::DrawPipelineData_t const pipelineCI {
-    // Static
-    .pDrawShader = &baseDrawShader,
-    // Dynamic
+    .useMeshes          = false,
+    .pDrawShader        = &baseDrawShader,
     .commandBuffersData = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 6, 1, 0, 0); } } },
   };
 
-  vonk::DrawPipelineData_t pipelineCI2 = pipelineCI;
-  pipelineCI2.pDrawShader              = &baseDrawShader,
-  pipelineCI2.commandBuffersData       = { { .commands = [](VkCommandBuffer cb) { vkCmdDraw(cb, 3, 1, 0, 0); } } },
+  // ::: Scene 2
+  auto const mesh = vonk.createMesh({ { { 0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+                                      { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+                                      { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } });
+
+  vonk::DrawPipelineData_t pipelineCI2;
+  pipelineCI2.useMeshes          = true;
+  pipelineCI2.pDrawShader        = &altDrawShader;
+  pipelineCI2.commandBuffersData = { { .commands = [&](VkCommandBuffer cb) { vonk.drawMesh(cb, mesh); } } };
 
   vonk.addPipeline(pipelineCI);
   vonk.addPipeline(pipelineCI2);

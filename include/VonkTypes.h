@@ -1,8 +1,10 @@
 #pragma once
+#include "_glm.h"
 #include "_vulkan.h"
 
 #include "Macros.h"
 
+#include <array>
 #include <string>
 #include <unordered_map>
 
@@ -226,28 +228,14 @@ struct PipelineLayoutData_t
     .pushConstantRangeCount = 0,        // Optional
     .pPushConstantRanges    = nullptr,  // Optional
   };
-
-  // . Input-State Vertex : Probably tends to grow with the 'pipelineLayout'
-  VkPipelineVertexInputStateCreateInfo inputstateVertexCI {
-    .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-    .vertexBindingDescriptionCount   = 0,
-    .pVertexBindingDescriptions      = nullptr,  // Optional
-    .vertexAttributeDescriptionCount = 0,
-    .pVertexAttributeDescriptions    = nullptr,  // Optional
-  };
-
-  // . Input-State Assembly : Probably will be always the same
-  VkPipelineInputAssemblyStateCreateInfo inputstateAssemblyCI {
-    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-    .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-    .primitiveRestartEnable = VK_FALSE,
-  };
 };
 
 //-----------------------------------------------
 
 struct DrawPipelineData_t
 {
+  bool useMeshes = true;
+
   // . Static
   VkPolygonMode         ffPolygonMode       = VK_POLYGON_MODE_FILL;
   VkCullModeFlags       ffCullMode          = VK_CULL_MODE_BACK_BIT;
@@ -280,7 +268,8 @@ struct DrawPipelineData_t
 
 struct DrawPipeline_t  // @DANI Change this to DrawPipeline_t and create ComputePipeline_t
 {
-  VkPipeline handle = VK_NULL_HANDLE;
+  VkPipeline handle    = VK_NULL_HANDLE;
+  bool       useMeshes = true;
   // . Static
   VkPipelineLayout                             layout = VK_NULL_HANDLE;
   std::vector<VkPipelineShaderStageCreateInfo> stagesCI;
@@ -288,6 +277,74 @@ struct DrawPipeline_t  // @DANI Change this to DrawPipeline_t and create Compute
   // . Dynamic
   std::vector<VkFramebuffer>   frameBuffers;
   std::vector<VkCommandBuffer> commandBuffers;
+};
+
+//-----------------------------------------------
+
+struct Vertex_t
+{
+  glm::vec3 pos;
+  glm::vec3 color;
+};
+
+//---
+
+auto static inline InputStateVertex(bool empty = false)
+{
+  static std::vector<VkVertexInputBindingDescription> const bindings = {
+    { .binding = 0, .stride = sizeof(Vertex_t), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX }
+  };
+  static std::vector<VkVertexInputAttributeDescription> const attribs = {
+    {
+      .binding  = 0,
+      .location = 0,
+      .format   = VK_FORMAT_R32G32B32_SFLOAT,
+      .offset   = offsetof(Vertex_t, pos),
+    },
+    {
+      .binding  = 0,
+      .location = 1,
+      .format   = VK_FORMAT_R32G32B32_SFLOAT,
+      .offset   = offsetof(Vertex_t, color),
+    },
+  };
+  static VkPipelineVertexInputStateCreateInfo const vertexFilled {
+    .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .vertexBindingDescriptionCount   = GetSizeU32(bindings),
+    .pVertexBindingDescriptions      = GetData(bindings),
+    .vertexAttributeDescriptionCount = GetSizeU32(attribs),
+    .pVertexAttributeDescriptions    = GetData(attribs),
+  };
+  static VkPipelineVertexInputStateCreateInfo const vertexEmpty {
+    .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+    .vertexBindingDescriptionCount   = 0,
+    .pVertexBindingDescriptions      = nullptr,
+    .vertexAttributeDescriptionCount = 0,
+    .pVertexAttributeDescriptions    = nullptr,
+  };
+  return !empty ? &vertexFilled : &vertexEmpty;
+}
+
+//---
+
+auto static inline InputStateAssembly()
+{
+  static VkPipelineInputAssemblyStateCreateInfo const assembly {
+    .sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+    .topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    .primitiveRestartEnable = VK_FALSE,
+  };
+
+  return &assembly;
+}
+
+//-----------------------------------------------
+
+struct Mesh_t
+{
+  VkBuffer              buffer = VK_NULL_HANDLE;
+  VkDeviceMemory        memory = VK_NULL_HANDLE;
+  std::vector<Vertex_t> data   = {};
 };
 
 //-----------------------------------------------

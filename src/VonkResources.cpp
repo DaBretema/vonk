@@ -18,7 +18,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
   MBU void *                                  pUserData)
 {
   static std::unordered_map<int32_t, bool> CACHE {};
-  auto const                               ID = pCallbackData->messageIdNumber;
+  auto const                               ID { pCallbackData->messageIdNumber };
 
   if (!CACHE[ID] && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
     fmt::print(
@@ -444,12 +444,12 @@ Texture_t createTexture(
   // . Memory
   VkMemoryRequirements memReqs {};
   vkGetImageMemoryRequirements(device, tex.image, &memReqs);
-  VkMemoryAllocateInfo const memAllloc {
+  VkMemoryAllocateInfo const memAlloc {
     .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
     .allocationSize  = memReqs.size,
     .memoryTypeIndex = vonk::getMemoryType(memProps, memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
   };
-  VkCheck(vkAllocateMemory(device, &memAllloc, nullptr, &tex.memory));
+  VkCheck(vkAllocateMemory(device, &memAlloc, nullptr, &tex.memory));
   VkCheck(vkBindImageMemory(device, tex.image, tex.memory, 0));
 
   // . View : add stencil bit if is depth texture and the format allows
@@ -774,7 +774,7 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
 
 #define VONK_SHADER_CACHE 0
 
-Shader_t createShader(VkDevice device, std::string const &name, VkShaderStageFlagBits stage)
+Shader_t createShader(Device_t const &device, std::string const &name, VkShaderStageFlagBits stage)
 {
   static std::unordered_map<VkShaderStageFlagBits, std::string> sStageToExtension {
     { VK_SHADER_STAGE_VERTEX_BIT, "vert" },
@@ -809,7 +809,7 @@ Shader_t createShader(VkDevice device, std::string const &name, VkShaderStageFla
     .pCode    = GetDataAs(const uint32_t *, code),
   };
   VkShaderModule shadermodule;
-  VkCheck(vkCreateShaderModule(device, &shadermoduleCI, nullptr, &shadermodule));
+  VkCheck(vkCreateShaderModule(device.handle, &shadermoduleCI, nullptr, &shadermodule));
 
   // . This is the thing that pipelines need
   VkPipelineShaderStageCreateInfo const shaderStageCI {
@@ -841,18 +841,18 @@ DrawShader_t createDrawShader(
   DrawShader_t ds;
 
   Assert(!vert.empty() and !frag.empty());
-  ds.vert = vonk::createShader(device.handle, vert, VK_SHADER_STAGE_VERTEX_BIT);
-  ds.frag = vonk::createShader(device.handle, frag, VK_SHADER_STAGE_FRAGMENT_BIT);
+  ds.vert = vonk::createShader(device, vert, VK_SHADER_STAGE_VERTEX_BIT);
+  ds.frag = vonk::createShader(device, frag, VK_SHADER_STAGE_FRAGMENT_BIT);
 
   if (!tesc.empty() or !tesc.empty()) {
     Assert(!tesc.empty() and !tesc.empty() and device.pGpu->features.tessellationShader);
-    ds.tesc = vonk::createShader(device.handle, tesc, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
-    ds.tese = vonk::createShader(device.handle, tese, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
+    ds.tesc = vonk::createShader(device, tesc, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
+    ds.tese = vonk::createShader(device, tese, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
   }
 
   if (!geom.empty()) {
     Assert(device.pGpu->features.geometryShader);
-    ds.geom = vonk::createShader(device.handle, geom, VK_SHADER_STAGE_GEOMETRY_BIT);
+    ds.geom = vonk::createShader(device, geom, VK_SHADER_STAGE_GEOMETRY_BIT);
   }
 
   return ds;
@@ -860,13 +860,13 @@ DrawShader_t createDrawShader(
 
 //-----------------------------------------------
 
-void destroyDrawShader(VkDevice device, DrawShader_t const &ds)
+void destroyDrawShader(Device_t const &device, DrawShader_t const &ds)
 {
-  vkDestroyShaderModule(device, ds.vert.module, nullptr);
-  vkDestroyShaderModule(device, ds.frag.module, nullptr);
-  vkDestroyShaderModule(device, ds.tesc.module, nullptr);
-  vkDestroyShaderModule(device, ds.tese.module, nullptr);
-  vkDestroyShaderModule(device, ds.geom.module, nullptr);
+  vkDestroyShaderModule(device.handle, ds.vert.module, nullptr);
+  vkDestroyShaderModule(device.handle, ds.frag.module, nullptr);
+  vkDestroyShaderModule(device.handle, ds.tesc.module, nullptr);
+  vkDestroyShaderModule(device.handle, ds.tese.module, nullptr);
+  vkDestroyShaderModule(device.handle, ds.geom.module, nullptr);
 }
 
 //-----------------------------------------------
@@ -898,6 +898,8 @@ DrawPipeline_t createPipeline(
   // Pipeline !
 
   auto const createPipeline_pipeline = [&]() {
+    pipeline.useMeshes = ci.useMeshes;
+
     // . FIXED FUNCS - Rasterization
     VkPipelineRasterizationStateCreateInfo const rasterizationStateCI = {
       .sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -943,7 +945,7 @@ DrawPipeline_t createPipeline(
     pipeline.stagesCI.emplace_back(ci.pDrawShader->vert.stageCI);
     pipeline.stagesCI.emplace_back(ci.pDrawShader->frag.stageCI);
 
-    // . Pipeline Layout
+    // . Pipeline Layout // @DANI check this for use of Mesh_t ¿?
     VkCheck(vkCreatePipelineLayout(device, &ci.pipelineLayoutData.pipelineLayoutCI, nullptr, &pipeline.layout));
 
     // . Pipeline   @DANI NOTE : Research about PipelineCache object.
@@ -969,8 +971,8 @@ DrawPipeline_t createPipeline(
       .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .stageCount          = GetSizeU32(pipeline.stagesCI),
       .pStages             = GetData(pipeline.stagesCI),
-      .pVertexInputState   = &ci.pipelineLayoutData.inputstateVertexCI,
-      .pInputAssemblyState = &ci.pipelineLayoutData.inputstateAssemblyCI,
+      .pVertexInputState   = InputStateVertex(!pipeline.useMeshes),
+      .pInputAssemblyState = InputStateAssembly(),
       .pViewportState      = &viewportStateCI,
       .pRasterizationState = &rasterizationStateCI,
       .pMultisampleState   = &multisamplingCI,
@@ -1066,12 +1068,14 @@ DrawPipeline_t createPipeline(
         renderpassBI.framebuffer = frameBuffers.at(i);  // pipeline.frameBuffers[i];
         VkCheck(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
         vkCmdBeginRenderPass(commandBuffer, &renderpassBI, VK_SUBPASS_CONTENTS_INLINE);
+
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
-        vkCmdSetViewport(commandBuffer, 0, GetSizeU32(viewports),
-                         GetData(viewports));  // Dynamic Viewport
-        vkCmdSetScissor(commandBuffer, 0, GetSizeU32(scissors),
-                        GetData(scissors));  // Dynamic Scissors
+
+        vkCmdSetViewport(commandBuffer, 0, GetSizeU32(viewports), GetData(viewports));  // Dynamic Viewport
+        vkCmdSetScissor(commandBuffer, 0, GetSizeU32(scissors), GetData(scissors));     // Dynamic Scissors
+
         if (commandBuffesData.commands) { commandBuffesData.commands(commandBuffer); }
+
         vkCmdEndRenderPass(commandBuffer);
         VkCheck(vkEndCommandBuffer(commandBuffer));
       }

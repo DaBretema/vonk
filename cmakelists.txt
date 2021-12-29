@@ -101,7 +101,7 @@ foreach(shader_src IN LISTS shaders_list)
   list(APPEND shaders_spv_list ${shaders_bin_dir}/${filename_and_ext}.spv)
 endforeach()
 
-# add_custom_target(shaders ALL DEPENDS ${shaders_spv_list}) # Seems like unneeded
+add_custom_target(shaders ALL DEPENDS ${shaders_spv_list}) # Seems like unneeded
 
 
 # ------------------------------------------------------------------------- #
