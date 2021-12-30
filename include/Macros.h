@@ -16,12 +16,12 @@
 //-----------------------------------------------
 
 // Vector C++ to C helpers
-#define GetSizeOf(v)            (v.size() > 0 ? v.size() : v.size() * sizeof(v.at(0)))
+#define GetSizeOf(v)            (v.size() < 1 ? v.size() : v.size() * sizeof(v.at(0)))
 #define GetSizeOfU32(v)         static_cast<uint32_t>(GetSizeOf(v))
 #define GetSizeOfAs(newType, v) static_cast<newType>(GetSizeOf(v))
-#define GetSize(v)              v.size()
-#define GetSizeU32(v)           static_cast<uint32_t>(GetSize(v))
-#define GetSizeAs(newType, v)   static_cast<newType>(GetSize(v))
+#define GetCount(v)             v.size()
+#define GetCountU32(v)          static_cast<uint32_t>(GetCount(v))
+#define GetCountAs(newType, v)  static_cast<newType>(GetCount(v))
 #define GetData(v)              v.data()
 #define GetDataAs(newType, v)   reinterpret_cast<newType>(GetData(v))
 

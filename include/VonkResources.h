@@ -118,37 +118,21 @@ inline Mesh_t createMesh(Device_t const &device, std::vector<Vertex_t> const &ve
   vkAllocateMemory(device.handle, &memAlloc, nullptr, &mesh.memory);
   vkBindBufferMemory(device.handle, mesh.buffer, mesh.memory, 0);
 
-  // @DANI issues here!!!!
-
   // . Copy data into the buffer
-
   void *data = nullptr;
-  vkMapMemory(device.handle, mesh.memory, 0, sizeof(Vertex_t) * mesh.data.size(), 0, &data);
-  memcpy(data, mesh.data.data(), sizeof(Vertex_t) * mesh.data.size());
-
-  LogInfof("data ptr = {} / Is null? {}", PtrStr(data), data == nullptr);
-
-  LogInfof(
-    "\nREAL DATA >>>\n 0 - P : {} C : {}\n 1 - P : {} C : {}\n 2 - P : {} C : {}",
-    glm::to_string(mesh.data[0].pos),
-    glm::to_string(mesh.data[0].color),
-    glm::to_string(mesh.data[1].pos),
-    glm::to_string(mesh.data[1].color),
-    glm::to_string(mesh.data[2].pos),
-    glm::to_string(mesh.data[2].color));
-
-  auto const d0 = static_cast<Vertex_t *>(data);
-  auto const d1 = d0 + sizeof(Vertex_t);
-  auto const d2 = d1 + sizeof(Vertex_t);
+  vkMapMemory(device.handle, mesh.memory, 0, GetSizeOfU32(mesh.data), 0, &data);
+  memcpy(data, mesh.data.data(), GetSizeOf(mesh.data));
+#if 0
+  auto const dptr = static_cast<Vertex_t *>(data);
   LogInfof(
     "\nRAW  DATA >>>\n 0 - P : {} C : {}\n 1 - P : {} C : {}\n 2 - P : {} C : {}",
-    glm::to_string(d0->pos),
-    glm::to_string(d0->color),
-    glm::to_string(d1->pos),
-    glm::to_string(d1->color),
-    glm::to_string(d2->pos),
-    glm::to_string(d2->color));
-
+    glm::to_string((dptr + 0)->pos),
+    glm::to_string((dptr + 0)->color),
+    glm::to_string((dptr + 1)->pos),
+    glm::to_string((dptr + 1)->color),
+    glm::to_string((dptr + 2)->pos),
+    glm::to_string((dptr + 2)->color));
+#endif
   vkUnmapMemory(device.handle, mesh.memory);
 
   return mesh;
@@ -164,7 +148,7 @@ inline void drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh)
   VkBuffer     buffers[] = { mesh.buffer };
   VkDeviceSize offsets[] = { 0 };
   vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
-  vkCmdDraw(cmd, GetSizeU32(mesh.data), 1, 0, 0);
+  vkCmdDraw(cmd, GetCountU32(mesh.data), 1, 0, 0);
 }
 
 }  // namespace vonk

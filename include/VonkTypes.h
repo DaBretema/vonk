@@ -310,9 +310,9 @@ auto static inline InputStateVertex(bool empty = false)
   };
   static VkPipelineVertexInputStateCreateInfo const vertexFilled {
     .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-    .vertexBindingDescriptionCount   = GetSizeU32(bindings),
+    .vertexBindingDescriptionCount   = GetCountU32(bindings),
     .pVertexBindingDescriptions      = GetData(bindings),
-    .vertexAttributeDescriptionCount = GetSizeU32(attribs),
+    .vertexAttributeDescriptionCount = GetCountU32(attribs),
     .pVertexAttributeDescriptions    = GetData(attribs),
   };
   static VkPipelineVertexInputStateCreateInfo const vertexEmpty {

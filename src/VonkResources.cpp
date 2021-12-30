@@ -91,10 +91,10 @@ Instance_t createInstance(const char *title, uint32_t apiVersion)
     .sType            = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
     .pApplicationInfo = &appInfo,
     // Extensions
-    .enabledExtensionCount   = GetSizeU32(instance.exts),
+    .enabledExtensionCount   = GetCountU32(instance.exts),
     .ppEnabledExtensionNames = GetData(instance.exts),
     // Layers
-    .enabledLayerCount   = GetSizeU32(instance.layers),
+    .enabledLayerCount   = GetCountU32(instance.layers),
     .ppEnabledLayerNames = GetData(instance.layers),
   };
 
@@ -266,11 +266,11 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   VkDeviceCreateInfo const deviceCI {
     .sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     .pEnabledFeatures        = &gpu.features,
-    .queueCreateInfoCount    = GetSizeU32(queueCIs),
+    .queueCreateInfoCount    = GetCountU32(queueCIs),
     .pQueueCreateInfos       = GetData(queueCIs),
-    .enabledExtensionCount   = GetSizeU32(gpu.exts),
+    .enabledExtensionCount   = GetCountU32(gpu.exts),
     .ppEnabledExtensionNames = GetData(gpu.exts),
-    .enabledLayerCount       = GetSizeU32(instance.layers),
+    .enabledLayerCount       = GetCountU32(instance.layers),
     .ppEnabledLayerNames     = GetData(instance.layers),
   };
 
@@ -315,11 +315,11 @@ VkRenderPass createRenderPass(VkDevice device, RenderPassData_t const &rpd)
 {
   VkRenderPassCreateInfo const renderpassCI {
     .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-    .attachmentCount = GetSizeU32(rpd.attachments),
+    .attachmentCount = GetCountU32(rpd.attachments),
     .pAttachments    = GetData(rpd.attachments),
-    .subpassCount    = GetSizeU32(rpd.subpassDescs),
+    .subpassCount    = GetCountU32(rpd.subpassDescs),
     .pSubpasses      = GetData(rpd.subpassDescs),
-    .dependencyCount = GetSizeU32(rpd.subpassDeps),
+    .dependencyCount = GetCountU32(rpd.subpassDeps),
     .pDependencies   = GetData(rpd.subpassDeps),
   };
 
@@ -671,7 +671,7 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
     .imageUsage      = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | swapchain.extraImageUsageFlags,
 
     .imageSharingMode      = gpDiffQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = gpDiffQueue ? GetSizeU32(gpIndices) : 0,
+    .queueFamilyIndexCount = gpDiffQueue ? GetCountU32(gpIndices) : 0,
     .pQueueFamilyIndices   = gpDiffQueue ? GetData(gpIndices) : nullptr,
 
     .oldSwapchain = swapchain.handle  // -> Ensure that we can still present
@@ -805,7 +805,7 @@ Shader_t createShader(Device_t const &device, std::string const &name, VkShaderS
 
   VkShaderModuleCreateInfo const shadermoduleCI {
     .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    .codeSize = GetSizeU32(code),
+    .codeSize = GetCountU32(code),
     .pCode    = GetDataAs(const uint32_t *, code),
   };
   VkShaderModule shadermodule;
@@ -933,7 +933,7 @@ DrawPipeline_t createPipeline(
       .sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
       .logicOpEnable   = VK_FALSE,
       .logicOp         = VK_LOGIC_OP_COPY,  // Optional
-      .attachmentCount = GetSizeU32(blendingPerAttachment),
+      .attachmentCount = GetCountU32(blendingPerAttachment),
       .pAttachments    = GetData(blendingPerAttachment),
     };
 
@@ -955,21 +955,21 @@ DrawPipeline_t createPipeline(
     };
     VkPipelineDynamicStateCreateInfo const dynamicStateCI {
       .sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-      .dynamicStateCount = GetSizeU32(dynamicStates),
+      .dynamicStateCount = GetCountU32(dynamicStates),
       .pDynamicStates    = GetData(dynamicStates),
     };
 
     VkPipelineViewportStateCreateInfo const viewportStateCI {
       .sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-      .viewportCount = GetSizeU32(ci.viewports),
+      .viewportCount = GetCountU32(ci.viewports),
       .pViewports    = GetData(ci.viewports),
-      .scissorCount  = GetSizeU32(ci.scissors),
+      .scissorCount  = GetCountU32(ci.scissors),
       .pScissors     = GetData(ci.scissors),
     };
 
     VkGraphicsPipelineCreateInfo const graphicsPipelineCI {
       .sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-      .stageCount          = GetSizeU32(pipeline.stagesCI),
+      .stageCount          = GetCountU32(pipeline.stagesCI),
       .pStages             = GetData(pipeline.stagesCI),
       .pVertexInputState   = InputStateVertex(!pipeline.useMeshes),
       .pInputAssemblyState = InputStateAssembly(),
@@ -1037,7 +1037,7 @@ DrawPipeline_t createPipeline(
     VkCommandBufferAllocateInfo const commandBufferAllocInfo {
       .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool        = commandPool,
-      .commandBufferCount = GetSizeU32(pipeline.commandBuffers),
+      .commandBufferCount = GetCountU32(pipeline.commandBuffers),
       .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
     };
     VkCheck(vkAllocateCommandBuffers(device, &commandBufferAllocInfo, GetData(pipeline.commandBuffers)));
@@ -1056,7 +1056,7 @@ DrawPipeline_t createPipeline(
       VkRenderPassBeginInfo renderpassBI {
         .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass      = pipeline.renderpass,  // with multiple renderpasses use commandBuffesData.renderPassIdx
-        .clearValueCount = GetSizeU32(clearValues),
+        .clearValueCount = GetCountU32(clearValues),
         .pClearValues    = GetData(clearValues),
         // ?? Use this both for blitting.
         .renderArea.offset = { 0, 0 },
@@ -1071,8 +1071,8 @@ DrawPipeline_t createPipeline(
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
-        vkCmdSetViewport(commandBuffer, 0, GetSizeU32(viewports), GetData(viewports));  // Dynamic Viewport
-        vkCmdSetScissor(commandBuffer, 0, GetSizeU32(scissors), GetData(scissors));     // Dynamic Scissors
+        vkCmdSetViewport(commandBuffer, 0, GetCountU32(viewports), GetData(viewports));  // Dynamic Viewport
+        vkCmdSetScissor(commandBuffer, 0, GetCountU32(scissors), GetData(scissors));     // Dynamic Scissors
 
         if (commandBuffesData.commands) { commandBuffesData.commands(commandBuffer); }
 

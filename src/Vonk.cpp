@@ -205,7 +205,7 @@ void Vonk::destroySwapChainDependencies()
   for (auto &pipeline : mPipelines) {
     // . Command Buffers
     auto &cb = pipeline.commandBuffers;
-    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, GetSizeU32(cb), GetData(cb)); }
+    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, GetCountU32(cb), GetData(cb)); }
 
     // // . Frame Buffers
     // for (size_t i = 0; i < pipeline.frameBuffers.size(); ++i) {
