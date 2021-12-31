@@ -253,7 +253,7 @@ void Vonk::init()
   // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
   mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
   // . Pick Gpu (aka: physical device)
-  mGpu = vonk::pickGpu(mInstance, true, true, true, true);
+  mGpu = vonk::pickGpu(mInstance, true, true, true, false);
   // . Create Device (aka: gpu-manager / logical-device)
   mDevice = vonk::createDevice(mInstance, mGpu);
   // . Create SwapChain

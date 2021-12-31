@@ -156,8 +156,9 @@ inline void copyBuffer(Device_t const &device, Buffer_t const &src, Buffer_t &ds
     .commandBufferCount = 1,
     .pCommandBuffers    = &cmd,
   };
-  vkQueueSubmit(device.transferQ, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(device.transferQ);  // There is some room to improve using 'vkWaitForFences'-logic
+  auto const queue = device.transferQ ? device.transferQ : device.graphicsQ;
+  vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(queue);  // There is some room to improve using 'vkWaitForFences'-logic
 
   // . Free
   vkFreeCommandBuffers(device.handle, device.commandPool, 1, &cmd);
