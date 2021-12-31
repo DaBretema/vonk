@@ -28,6 +28,19 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
 Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu);
 void     destroyDevice(Device_t &device);
 
+// COMMAND POOL
+//-----------------------------------------------
+inline VkCommandPool createCommandPool(Device_t const &device, uint32_t idx)
+{
+  VkCommandPoolCreateInfo const cmdPoolCI {
+    .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .queueFamilyIndex = idx,
+  };
+  VkCommandPool cmdPool;
+  VkCheck(vkCreateCommandPool(device.handle, &cmdPoolCI, nullptr, &cmdPool));
+  return cmdPool;
+};
+
 // RENDER PASSes
 //-----------------------------------------------
 VkRenderPass createRenderPass(VkDevice device, RenderPassData_t const &rpd);
@@ -130,7 +143,7 @@ inline void copyBuffer(Device_t const &device, Buffer_t const &src, Buffer_t &ds
   VkCommandBufferAllocateInfo allocInfo {
     .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
     .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    .commandPool        = device.commandPool,
+    .commandPool        = device.transferCP,
     .commandBufferCount = 1,
   };
   VkCommandBuffer cmd;
@@ -161,7 +174,7 @@ inline void copyBuffer(Device_t const &device, Buffer_t const &src, Buffer_t &ds
   vkQueueWaitIdle(queue);  // There is some room to improve using 'vkWaitForFences'-logic
 
   // . Free
-  vkFreeCommandBuffers(device.handle, device.commandPool, 1, &cmd);
+  vkFreeCommandBuffers(device.handle, device.transferCP, 1, &cmd);
 }
 //---
 inline void destroyBuffer(Device_t const &device, Buffer_t const &buff)

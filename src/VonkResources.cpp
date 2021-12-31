@@ -133,92 +133,84 @@ void destroyInstance(Instance_t &instance)
 
 Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableCompute, bool enableTransfer)
 {
-  // . Iteration variables
+  Gpu_t    outGpu;
+  uint32_t maxScore = 0;
 
+  // . Iteration variables
   uint32_t gpuCount = 0;
   vkEnumeratePhysicalDevices(instance.handle, &gpuCount, nullptr);
   std::vector<VkPhysicalDevice> gpus(gpuCount);
   vkEnumeratePhysicalDevices(instance.handle, &gpuCount, gpus.data());
 
-  Gpu_t    outGpu;
-  uint32_t maxScore = 0;
-
   // . Evaluate all the gpus
-
   for (const auto &gpuHandle : gpus) {
     Gpu_t gpu;
 
-    // . Get physical-device info
+    // Get physical-device info
     gpu.handle = gpuHandle;
     vkGetPhysicalDeviceFeatures(gpu.handle, &gpu.features);
     vkGetPhysicalDeviceProperties(gpu.handle, &gpu.properties);
     vkGetPhysicalDeviceMemoryProperties(gpu.handle, &gpu.memory);
-
     gpu.surfSupp = vonk::getSurfaceSupport(gpu.handle, instance.surface);
 
-    // . Queues Indices
-
-    // ... Get families
+    // Queues Indices
+    // - Get families
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu.handle, &queueFamilyCount, nullptr);
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(gpu.handle, &queueFamilyCount, queueFamilies.data());
-
-    // ... Get indices of them : Only evaluate enabled ones
-
+    // - Get indices of them : Only evaluate enabled ones
     bool hasGraphics = !enableGraphics;
     bool hasPresent  = !enablePresent;
     bool hasCompute  = !enableCompute;
     bool hasTransfer = !enableTransfer;
-
-    auto const qIdxDiff = [](uint32_t curr, std::optional<uint32_t> from) {
+    // - Indices uniqueness helper
+    static auto const idxDiff = [](uint32_t curr, std::optional<uint32_t> from) {
       return (!from.has_value() || (from.has_value() and from.value() != curr));
     };
-
+    // - Get the indices
     for (uint32_t i = 0u; i < queueFamilies.size(); ++i) {
-      auto const flags = queueFamilies.at(i).queueFlags;
-
-      VkBool32 presentSupport = false;
+      VkBool32   presentSupport = false;
+      auto const flags          = queueFamilies.at(i).queueFlags;
       vkGetPhysicalDeviceSurfaceSupportKHR(gpu.handle, i, instance.surface, &presentSupport);
-
       if (!hasGraphics and enableGraphics and (flags & VK_QUEUE_GRAPHICS_BIT)) {
         hasGraphics     = true;
         gpu.graphicsIdx = i;
       }
       if (!hasPresent and enablePresent and presentSupport) {
-        hasPresent     = qIdxDiff(i, gpu.graphicsIdx);
+        hasPresent     = idxDiff(i, gpu.graphicsIdx);
         gpu.presentIdx = i;
       }
       if (!hasCompute and enableCompute and (flags & VK_QUEUE_COMPUTE_BIT)) {
-        hasCompute     = qIdxDiff(i, gpu.graphicsIdx) and qIdxDiff(i, gpu.presentIdx);
+        hasCompute     = idxDiff(i, gpu.graphicsIdx) and idxDiff(i, gpu.presentIdx);
         gpu.computeIdx = i;
       }
       if (!hasTransfer and enableTransfer and (flags & VK_QUEUE_TRANSFER_BIT)) {
-        hasTransfer     = qIdxDiff(i, gpu.graphicsIdx) and qIdxDiff(i, gpu.presentIdx) and qIdxDiff(i, gpu.computeIdx);
+        hasTransfer     = idxDiff(i, gpu.graphicsIdx) and idxDiff(i, gpu.presentIdx) and idxDiff(i, gpu.computeIdx);
         gpu.transferIdx = i;
       }
       if (hasGraphics and hasPresent and hasCompute and hasTransfer) break;
     }
 
-    // . Validate the gpu
+    // Validate the gpu
     if (
-      !(hasGraphics and gpu.presentIdx.has_value() and hasCompute and hasTransfer)  //
+      !(hasGraphics and gpu.presentIdx.has_value() and hasCompute and hasTransfer)  // @DANI review!!!
       or (gpu.surfSupp.presentModes.empty() or gpu.surfSupp.formats.empty())
       or !vonk::checkGpuExtensionsSupport(gpu)  //
     ) {
       return gpu;
     }
 
-    // . Get score from a valid gpu
+    // Get score from a valid gpu
     uint32_t const isDiscreteGPU = (gpu.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU);
     uint32_t const score         = (1000 * isDiscreteGPU) + gpu.properties.limits.maxImageDimension2D;
-
     if (score > maxScore) {
       outGpu   = gpu;
       maxScore = score;
     }
   }
 
+  // . Log selected queues (indices)
   LogInfof(
     "QUEUE INDICES -> g:{} p:{} c:{} t:{}",
     outGpu.graphicsIdx.has_value() ? fmt::to_string(outGpu.graphicsIdx.value()) : "x",
@@ -228,7 +220,6 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
 
   // . Return if valid gpu has been found
   AbortIfMsg((maxScore < 1), "Suitable GPU not found!");
-
   outGpu.pInstance = &instance;
   return outGpu;
 }
@@ -280,18 +271,23 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   // . Create Device !
   VkCheck(vkCreateDevice(gpu.handle, &deviceCI, nullptr, &device.handle));
 
-  // . Pick required queues
-  if (gpu.graphicsIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.graphicsIdx.value(), 0, &device.graphicsQ);
-  if (gpu.computeIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.computeIdx.value(), 0, &device.computeQ);
-  if (gpu.transferIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.transferIdx.value(), 0, &device.transferQ);
-  if (gpu.presentIdx.has_value()) vkGetDeviceQueue(device.handle, gpu.presentIdx.value(), 0, &device.presentQ);
-
-  // . Command Pool :  Maybe move this out and create one per thread ¿?
-  VkCommandPoolCreateInfo const commandPoolCI {
-    .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .queueFamilyIndex = gpu.graphicsIdx.value(),
-  };
-  VkCheck(vkCreateCommandPool(device.handle, &commandPoolCI, nullptr, &device.commandPool));
+  // . Pick required queues and command pool
+  if (gpu.graphicsIdx.has_value()) {
+    device.graphicsCP = createCommandPool(device, gpu.graphicsIdx.value());
+    vkGetDeviceQueue(device.handle, gpu.graphicsIdx.value(), 0, &device.graphicsQ);
+  }
+  if (gpu.computeIdx.has_value()) {
+    device.computeCP = createCommandPool(device, gpu.computeIdx.value());
+    vkGetDeviceQueue(device.handle, gpu.computeIdx.value(), 0, &device.computeQ);
+  }
+  if (gpu.transferIdx.has_value()) {
+    device.transferCP = createCommandPool(device, gpu.transferIdx.value());
+    vkGetDeviceQueue(device.handle, gpu.transferIdx.value(), 0, &device.transferQ);
+  }
+  if (gpu.presentIdx.has_value()) {
+    device.presentCP = createCommandPool(device, gpu.presentIdx.value());
+    vkGetDeviceQueue(device.handle, gpu.presentIdx.value(), 0, &device.presentQ);
+  }
 
   device.pGpu = &gpu;
   return device;
@@ -301,7 +297,11 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
 
 void destroyDevice(Device_t &device)
 {
-  vkDestroyCommandPool(device.handle, device.commandPool, nullptr);
+  if (device.graphicsCP) vkDestroyCommandPool(device.handle, device.graphicsCP, nullptr);
+  if (device.computeCP) vkDestroyCommandPool(device.handle, device.computeCP, nullptr);
+  if (device.transferCP) vkDestroyCommandPool(device.handle, device.transferCP, nullptr);
+  if (device.presentCP) vkDestroyCommandPool(device.handle, device.presentCP, nullptr);
+
   vkDestroyDevice(device.handle, nullptr);
   device = Device_t {};
 }

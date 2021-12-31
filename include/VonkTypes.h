@@ -54,8 +54,10 @@ struct Gpu_t
 
 struct Device_t
 {
-  VkDevice      handle      = VK_NULL_HANDLE;
-  VkCommandPool commandPool = VK_NULL_HANDLE;
+  VkDevice handle = VK_NULL_HANDLE;
+  // VkCommandPool commandPool = VK_NULL_HANDLE;
+  VkCommandPool graphicsCP = VK_NULL_HANDLE, presentCP = VK_NULL_HANDLE, computeCP = VK_NULL_HANDLE,
+                transferCP = VK_NULL_HANDLE;
   VkQueue graphicsQ = VK_NULL_HANDLE, presentQ = VK_NULL_HANDLE, computeQ = VK_NULL_HANDLE, transferQ = VK_NULL_HANDLE;
 
   Gpu_t const *pGpu = nullptr;

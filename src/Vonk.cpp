@@ -91,7 +91,7 @@ void Vonk::addPipeline(DrawPipelineData_t const &ci)
     mPipelinesCI.back(),
     mSwapChain,
     mDevice.handle,
-    mDevice.commandPool,
+    mDevice.graphicsCP,
     mSwapChain.defaultRenderPass,
     mSwapChain.defaultFrameBuffers));
 };
@@ -205,7 +205,7 @@ void Vonk::destroySwapChainDependencies()
   for (auto &pipeline : mPipelines) {
     // . Command Buffers
     auto &cb = pipeline.commandBuffers;
-    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.commandPool, GetCountU32(cb), GetData(cb)); }
+    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.graphicsCP, GetCountU32(cb), GetData(cb)); }
 
     // // . Frame Buffers
     // for (size_t i = 0; i < pipeline.frameBuffers.size(); ++i) {
@@ -232,7 +232,7 @@ void Vonk::recreateSwapChain()
       mPipelinesCI[i],
       mSwapChain,
       mDevice.handle,
-      mDevice.commandPool,
+      mDevice.graphicsCP,
       mSwapChain.defaultRenderPass,
       mSwapChain.defaultFrameBuffers);
   }
@@ -253,7 +253,7 @@ void Vonk::init()
   // . Create Instance : VkInstance, VkDebugMessenger, VkSurfaceKHR
   mInstance = vonk::createInstance(vonk::window::title.c_str(), VK_API_VERSION_1_2);
   // . Pick Gpu (aka: physical device)
-  mGpu = vonk::pickGpu(mInstance, true, true, true, false);
+  mGpu = vonk::pickGpu(mInstance, true, true, true, true);
   // . Create Device (aka: gpu-manager / logical-device)
   mDevice = vonk::createDevice(mInstance, mGpu);
   // . Create SwapChain

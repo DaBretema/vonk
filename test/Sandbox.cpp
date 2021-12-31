@@ -40,9 +40,9 @@ int main()
   };
 
   // ::: Scene 2
-  auto const mesh = vonk.createMesh({ { { 0.0f, -0.5f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-                                      { { 0.5f, 0.5f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-                                      { { -0.5f, 0.5f, 0.0f }, { 0.0f, 0.0f, 1.0f } } });
+  auto const mesh = vonk.createMesh({ { { 0.0f, -0.25f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+                                      { { 0.25f, 0.25f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+                                      { { -0.25f, 0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f } } });
 
   vonk::DrawPipelineData_t pipelineCI2;
   pipelineCI2.useMeshes          = true;
