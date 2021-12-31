@@ -171,6 +171,10 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
     bool hasCompute  = !enableCompute;
     bool hasTransfer = !enableTransfer;
 
+    auto const qIdxDiff = [](uint32_t curr, std::optional<uint32_t> from) {
+      return (!from.has_value() || (from.has_value() and from.value() != curr));
+    };
+
     for (uint32_t i = 0u; i < queueFamilies.size(); ++i) {
       auto const flags = queueFamilies.at(i).queueFlags;
 
@@ -182,16 +186,15 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
         gpu.graphicsIdx = i;
       }
       if (!hasPresent and enablePresent and presentSupport) {
-        auto const &G  = gpu.graphicsIdx;
-        hasPresent     = (!G.has_value() || (G.has_value() and G.value() != i));  // Different from graphics
+        hasPresent     = qIdxDiff(i, gpu.graphicsIdx);
         gpu.presentIdx = i;
       }
       if (!hasCompute and enableCompute and (flags & VK_QUEUE_COMPUTE_BIT)) {
-        hasCompute     = true;
+        hasCompute     = qIdxDiff(i, gpu.graphicsIdx) and qIdxDiff(i, gpu.presentIdx);
         gpu.computeIdx = i;
       }
       if (!hasTransfer and enableTransfer and (flags & VK_QUEUE_TRANSFER_BIT)) {
-        hasTransfer     = true;
+        hasTransfer     = qIdxDiff(i, gpu.graphicsIdx) and qIdxDiff(i, gpu.presentIdx) and qIdxDiff(i, gpu.computeIdx);
         gpu.transferIdx = i;
       }
       if (hasGraphics and hasPresent and hasCompute and hasTransfer) break;

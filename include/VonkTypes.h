@@ -56,7 +56,7 @@ struct Device_t
 {
   VkDevice      handle      = VK_NULL_HANDLE;
   VkCommandPool commandPool = VK_NULL_HANDLE;
-  VkQueue       graphicsQ, presentQ, computeQ, transferQ;
+  VkQueue graphicsQ = VK_NULL_HANDLE, presentQ = VK_NULL_HANDLE, computeQ = VK_NULL_HANDLE, transferQ = VK_NULL_HANDLE;
 
   Gpu_t const *pGpu = nullptr;
 };
@@ -281,6 +281,16 @@ struct DrawPipeline_t  // @DANI Change this to DrawPipeline_t and create Compute
 
 //-----------------------------------------------
 
+struct Buffer_t
+{
+  VkBuffer       handle = VK_NULL_HANDLE;
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+  VkDeviceSize   size   = 0u;
+  uint32_t       count  = 0u;
+};
+
+//-----------------------------------------------
+
 struct Vertex_t
 {
   glm::vec3 pos;
@@ -342,9 +352,8 @@ auto static inline InputStateAssembly()
 
 struct Mesh_t
 {
-  VkBuffer              buffer = VK_NULL_HANDLE;
-  VkDeviceMemory        memory = VK_NULL_HANDLE;
-  std::vector<Vertex_t> data   = {};
+  // std::vector<Vertex_t> data = {};
+  Buffer_t vertices;
 };
 
 //-----------------------------------------------

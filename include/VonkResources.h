@@ -87,68 +87,141 @@ DrawPipeline_t createPipeline(
   std::vector<VkFramebuffer> const &frameBuffers);
 void destroyPipeline(SwapChain_t const &swapchain, DrawPipeline_t const &pipeline);
 
+// BUFFERs
+//-----------------------------------------------
+
+inline Buffer_t createBuffer(
+  Device_t const &      device,
+  size_t                elemSize,
+  uint32_t              count,
+  VkBufferUsageFlags    usage,
+  VkMemoryPropertyFlags properties)
+{
+  Buffer_t buffer;
+  buffer.size  = elemSize * count;
+  buffer.count = count;
+
+  // . Buffer
+  VkBufferCreateInfo bufferCI {
+    .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .size        = buffer.size,
+    .usage       = usage,
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+  };
+  VkCheck(vkCreateBuffer(device.handle, &bufferCI, nullptr, &buffer.handle));
+
+  // . Memory
+  VkMemoryRequirements memReqs;
+  vkGetBufferMemoryRequirements(device.handle, buffer.handle, &memReqs);
+  VkMemoryAllocateInfo const memAlloc {
+    .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize  = memReqs.size,
+    .memoryTypeIndex = vonk::getMemoryType(device.pGpu->memory, memReqs.memoryTypeBits, properties),
+  };
+  vkAllocateMemory(device.handle, &memAlloc, nullptr, &buffer.memory);
+  vkBindBufferMemory(device.handle, buffer.handle, buffer.memory, 0);
+
+  return buffer;
+}
+//---
+inline void copyBuffer(Device_t const &device, Buffer_t const &src, Buffer_t &dst)
+{
+  // . Allocate
+  VkCommandBufferAllocateInfo allocInfo {
+    .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    .commandPool        = device.commandPool,
+    .commandBufferCount = 1,
+  };
+  VkCommandBuffer cmd;
+  vkAllocateCommandBuffers(device.handle, &allocInfo, &cmd);
+
+  // . Record
+  VkCommandBufferBeginInfo const beginInfo {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+  };
+  vkBeginCommandBuffer(cmd, &beginInfo);
+  VkBufferCopy const copyRegion {
+    .srcOffset = 0,  // Optional
+    .dstOffset = 0,  // Optional
+    .size      = src.size,
+  };
+  vkCmdCopyBuffer(cmd, src.handle, dst.handle, 1, &copyRegion);
+  vkEndCommandBuffer(cmd);
+
+  // . Submit
+  VkSubmitInfo const submitInfo {
+    .sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .commandBufferCount = 1,
+    .pCommandBuffers    = &cmd,
+  };
+  vkQueueSubmit(device.transferQ, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(device.transferQ);  // There is some room to improve using 'vkWaitForFences'-logic
+
+  // . Free
+  vkFreeCommandBuffers(device.handle, device.commandPool, 1, &cmd);
+}
+//---
+inline void destroyBuffer(Device_t const &device, Buffer_t const &buff)
+{
+  vkDestroyBuffer(device.handle, buff.handle, nullptr);
+  vkFreeMemory(device.handle, buff.memory, nullptr);
+}
+
 // VERTEX BUFFERs
 //-----------------------------------------------
 inline Mesh_t createMesh(Device_t const &device, std::vector<Vertex_t> const &vertices)
 {
   Assert(device.pGpu);
 
-  Mesh_t mesh;
-  mesh.data = vertices;  // std::move(vertices);
+  // . Create
+  auto const buffHost = createBuffer(
+    device,
+    sizeof(Vertex_t),
+    GetCountU32(vertices),
+    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-  // . Buffer
-  VkBufferCreateInfo buffCI {
-    .sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-    .size        = GetSizeOfU32(mesh.data),
-    .usage       = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-  };
-  VkCheck(vkCreateBuffer(device.handle, &buffCI, nullptr, &mesh.buffer));
+  auto buffDev = createBuffer(
+    device,
+    sizeof(Vertex_t),
+    GetCountU32(vertices),
+    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-  // . Memory
-  // HOST_COHERENT_BIT = Guaranteed transfer completeness before the next call to vkQueueSubmit
-  VkMemoryRequirements memReqs;
-  vkGetBufferMemoryRequirements(device.handle, mesh.buffer, &memReqs);
-  static constexpr uint32_t  memFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  VkMemoryAllocateInfo const memAlloc {
-    .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-    .allocationSize  = memReqs.size,
-    .memoryTypeIndex = vonk::getMemoryType(device.pGpu->memory, memReqs.memoryTypeBits, memFlags),
-  };
-  vkAllocateMemory(device.handle, &memAlloc, nullptr, &mesh.memory);
-  vkBindBufferMemory(device.handle, mesh.buffer, mesh.memory, 0);
-
-  // . Copy data into the buffer
+  // . Populate the host one
   void *data = nullptr;
-  vkMapMemory(device.handle, mesh.memory, 0, GetSizeOfU32(mesh.data), 0, &data);
-  memcpy(data, mesh.data.data(), GetSizeOf(mesh.data));
-#if 0
-  auto const dptr = static_cast<Vertex_t *>(data);
-  LogInfof(
-    "\nRAW  DATA >>>\n 0 - P : {} C : {}\n 1 - P : {} C : {}\n 2 - P : {} C : {}",
-    glm::to_string((dptr + 0)->pos),
-    glm::to_string((dptr + 0)->color),
-    glm::to_string((dptr + 1)->pos),
-    glm::to_string((dptr + 1)->color),
-    glm::to_string((dptr + 2)->pos),
-    glm::to_string((dptr + 2)->color));
+  vkMapMemory(device.handle, buffHost.memory, 0, GetSizeOfU32(vertices), 0, &data);
+  memcpy(data, vertices.data(), GetSizeOf(vertices));
+#if 1
+  auto const  dptr = static_cast<Vertex_t *>(data);
+  std::string ds   = "";
+  for (size_t i = 0; i < GetCount(vertices); ++i) {
+    ds += fmt::format("\n{} - P : {} C : {}", i, glm::to_string((dptr + i)->pos), glm::to_string((dptr + i)->color));
+  }
 #endif
-  vkUnmapMemory(device.handle, mesh.memory);
+  vkUnmapMemory(device.handle, buffHost.memory);
 
+  // . Copy from Host to Dev and clean the Host one
+  copyBuffer(device, buffHost, buffDev);
+  destroyBuffer(device, buffHost);
+
+  Mesh_t mesh;
+  mesh.vertices = buffDev;
   return mesh;
 }
 inline void destroyMesh(Device_t const &device, Mesh_t &mesh)
 {
-  vkDestroyBuffer(device.handle, mesh.buffer, nullptr);
-  vkFreeMemory(device.handle, mesh.memory, nullptr);
-  mesh.data.clear();
+  destroyBuffer(device, mesh.vertices);
+  // mesh.data.clear();
 }
 inline void drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh)
 {
-  VkBuffer     buffers[] = { mesh.buffer };
+  VkBuffer     buffers[] = { mesh.vertices.handle };
   VkDeviceSize offsets[] = { 0 };
   vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
-  vkCmdDraw(cmd, GetCountU32(mesh.data), 1, 0, 0);
+  vkCmdDraw(cmd, mesh.vertices.count, 1, 0, 0);
 }
 
 }  // namespace vonk
