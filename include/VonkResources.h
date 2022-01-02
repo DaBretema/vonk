@@ -228,14 +228,25 @@ inline void destroyMesh(Device_t const &device, Mesh_t &mesh)
 //---
 inline void drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh)
 {
-  VkBuffer     vertexBuffers[] = { mesh.vertices.handle };
-  VkDeviceSize offsets[]       = { 0 };
-  vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-  vkCmdBindIndexBuffer(cmd, mesh.indices.handle, 0, VK_INDEX_TYPE_UINT32);  // VK_INDEX_TYPE_UINT32
-  vkCmdDrawIndexed(cmd, mesh.indices.count, 1, 0, 0, 0);
+  // ROOM TO IMPROVEMENT : https://developer.nvidia.com/vulkan-memory-management
 
-  // vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-  // vkCmdDraw(cmd, mesh.vertices.count, 1, 0, 0);
+  /*
+   You should store multiple buffers, like the vertex and index buffer, into a single VkBuffer and use offsets in
+   commands like vkCmdBindVertexBuffers. The advantage is that your data is more cache friendly in that case, because
+   it's closer together. It is even possible to reuse the same chunk of memory for multiple resources if they are not
+   used during the same render operations, provided that their data is refreshed, of course. This is known as aliasing
+   and some Vulkan functions have explicit flags to specify that you want to do this.
+  */
+
+  VkBuffer const     vertexBuffers[] = { mesh.vertices.handle };
+  VkDeviceSize const offsets[]       = { 0 };
+  vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+#if 1
+  vkCmdBindIndexBuffer(cmd, mesh.indices.handle, 0, VK_INDEX_TYPE_UINT32);  // or... VK_INDEX_TYPE_UINT16
+  vkCmdDrawIndexed(cmd, mesh.indices.count, 1, 0, 0, 0);
+#else
+  vkCmdDraw(cmd, mesh.vertices.count, 1, 0, 0);
+#endif
 }
 //---
 
