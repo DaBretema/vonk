@@ -93,4 +93,19 @@ bool checkValidationLayersSupport(std::vector<char const *> const &layers)
   return required.empty();
 }
 
+//-----------------------------------------------
+
+std::vector<uint32_t> getUniqueQueueFamilies(Gpu_t const &gpu)
+{
+  std::set<uint32_t> uFamilies {};
+  if (gpu.queueFamily.graphics.has_value()) uFamilies.emplace(gpu.queueFamily.graphics.value());
+  if (gpu.queueFamily.present.has_value()) uFamilies.emplace(gpu.queueFamily.present.value());
+  if (gpu.queueFamily.transfer.has_value()) uFamilies.emplace(gpu.queueFamily.transfer.value());
+  if (gpu.queueFamily.compute.has_value()) uFamilies.emplace(gpu.queueFamily.compute.value());
+
+  return std::vector<uint32_t>(uFamilies.begin(), uFamilies.end());
+}
+
+//-----------------------------------------------
+
 }  // namespace vonk

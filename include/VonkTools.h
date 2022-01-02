@@ -21,4 +21,6 @@ SurfaceSupport_t getSurfaceSupport(VkPhysicalDevice gpu, VkSurfaceKHR surface);
 bool checkGpuExtensionsSupport(Gpu_t const &gpu);
 bool checkValidationLayersSupport(std::vector<char const *> const &layers);
 
+std::vector<uint32_t> getUniqueQueueFamilies(Gpu_t const &gpu);
+
 }  // namespace vonk

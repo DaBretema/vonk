@@ -91,7 +91,7 @@ void Vonk::addPipeline(DrawPipelineData_t const &ci)
     mPipelinesCI.back(),
     mSwapChain,
     mDevice.handle,
-    mDevice.graphicsCP,
+    mDevice.cmdpool.graphics,
     mSwapChain.defaultRenderPass,
     mSwapChain.defaultFrameBuffers));
 };
@@ -162,7 +162,7 @@ void Vonk::drawFrame()
   };
   // (2.3) Reset fences right before asking for draw
   vkResetFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame]);
-  VkCheck(vkQueueSubmit(mDevice.graphicsQ, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
+  VkCheck(vkQueueSubmit(mDevice.queue.graphics, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
 
   //=====
   //=====   3. DUMP TO SCREEN : Present Queue
@@ -178,7 +178,7 @@ void Vonk::drawFrame()
     .pResults           = nullptr,  // Optional
   };
   // (3.2) Ask for dump into screen
-  auto const presentRet = vkQueuePresentKHR(mDevice.presentQ, &presentInfo);
+  auto const presentRet = vkQueuePresentKHR(mDevice.queue.present, &presentInfo);
   // (3.3) Validate swapchain state
   if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vonk::window::framebufferResized) {
     vonk::window::framebufferResized = false;  // move this variable to vonk::Vonk
@@ -205,7 +205,7 @@ void Vonk::destroySwapChainDependencies()
   for (auto &pipeline : mPipelines) {
     // . Command Buffers
     auto &cb = pipeline.commandBuffers;
-    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.graphicsCP, GetCountU32(cb), GetData(cb)); }
+    if (cb.size() > 0) { vkFreeCommandBuffers(mDevice.handle, mDevice.cmdpool.graphics, GetCountU32(cb), GetData(cb)); }
 
     // // . Frame Buffers
     // for (size_t i = 0; i < pipeline.frameBuffers.size(); ++i) {
@@ -232,7 +232,7 @@ void Vonk::recreateSwapChain()
       mPipelinesCI[i],
       mSwapChain,
       mDevice.handle,
-      mDevice.graphicsCP,
+      mDevice.cmdpool.graphics,
       mSwapChain.defaultRenderPass,
       mSwapChain.defaultFrameBuffers);
   }

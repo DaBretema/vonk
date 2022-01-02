@@ -131,7 +131,7 @@ void destroyInstance(Instance_t &instance)
 
 //-----------------------------------------------
 
-Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableCompute, bool enableTransfer)
+Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableTransfer, bool enableCompute)
 {
   Gpu_t    outGpu;
   uint32_t maxScore = 0;
@@ -162,8 +162,8 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
     // - Get indices of them : Only evaluate enabled ones
     bool hasGraphics = !enableGraphics;
     bool hasPresent  = !enablePresent;
-    bool hasCompute  = !enableCompute;
     bool hasTransfer = !enableTransfer;
+    bool hasCompute  = !enableCompute;
     // - Indices uniqueness helper
     static auto const idxDiff = [](uint32_t curr, std::optional<uint32_t> from) {
       return (!from.has_value() || (from.has_value() and from.value() != curr));
@@ -174,27 +174,28 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
       auto const flags          = queueFamilies.at(i).queueFlags;
       vkGetPhysicalDeviceSurfaceSupportKHR(gpu.handle, i, instance.surface, &presentSupport);
       if (!hasGraphics and enableGraphics and (flags & VK_QUEUE_GRAPHICS_BIT)) {
-        hasGraphics     = true;
-        gpu.graphicsIdx = i;
+        hasGraphics              = true;
+        gpu.queueFamily.graphics = i;
       }
       if (!hasPresent and enablePresent and presentSupport) {
-        hasPresent     = idxDiff(i, gpu.graphicsIdx);
-        gpu.presentIdx = i;
-      }
-      if (!hasCompute and enableCompute and (flags & VK_QUEUE_COMPUTE_BIT)) {
-        hasCompute     = idxDiff(i, gpu.graphicsIdx) and idxDiff(i, gpu.presentIdx);
-        gpu.computeIdx = i;
+        hasPresent              = idxDiff(i, gpu.queueFamily.graphics);
+        gpu.queueFamily.present = i;
       }
       if (!hasTransfer and enableTransfer and (flags & VK_QUEUE_TRANSFER_BIT)) {
-        hasTransfer     = idxDiff(i, gpu.graphicsIdx) and idxDiff(i, gpu.presentIdx) and idxDiff(i, gpu.computeIdx);
-        gpu.transferIdx = i;
+        hasTransfer              = idxDiff(i, gpu.queueFamily.graphics) and idxDiff(i, gpu.queueFamily.present);
+        gpu.queueFamily.transfer = i;
       }
-      if (hasGraphics and hasPresent and hasCompute and hasTransfer) break;
+      if (!hasCompute and enableCompute and (flags & VK_QUEUE_COMPUTE_BIT)) {
+        hasCompute = idxDiff(i, gpu.queueFamily.graphics) and idxDiff(i, gpu.queueFamily.present)
+                     and idxDiff(i, gpu.queueFamily.transfer);
+        gpu.queueFamily.compute = i;
+      }
+      if (hasGraphics and hasPresent and hasTransfer and hasCompute) break;
     }
 
     // Validate the gpu
     if (
-      !(hasGraphics and gpu.presentIdx.has_value() and hasCompute and hasTransfer)  // @DANI review!!!
+      !(hasGraphics and gpu.queueFamily.present.has_value() and hasTransfer and hasCompute)  // @DANI review!!!
       or (gpu.surfSupp.presentModes.empty() or gpu.surfSupp.formats.empty())
       or !vonk::checkGpuExtensionsSupport(gpu)  //
     ) {
@@ -212,11 +213,11 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
 
   // . Log selected queues (indices)
   LogInfof(
-    "QUEUE INDICES -> g:{} p:{} c:{} t:{}",
-    outGpu.graphicsIdx.has_value() ? fmt::to_string(outGpu.graphicsIdx.value()) : "x",
-    outGpu.presentIdx.has_value() ? fmt::to_string(outGpu.presentIdx.value()) : "x",
-    outGpu.computeIdx.has_value() ? fmt::to_string(outGpu.computeIdx.value()) : "x",
-    outGpu.transferIdx.has_value() ? fmt::to_string(outGpu.transferIdx.value()) : "x");
+    "QUEUE INDICES -> g:{} p:{} t:{} c:{}",
+    outGpu.queueFamily.graphics.has_value() ? fmt::to_string(outGpu.queueFamily.graphics.value()) : "x",
+    outGpu.queueFamily.present.has_value() ? fmt::to_string(outGpu.queueFamily.present.value()) : "x",
+    outGpu.queueFamily.transfer.has_value() ? fmt::to_string(outGpu.queueFamily.transfer.value()) : "x",
+    outGpu.queueFamily.compute.has_value() ? fmt::to_string(outGpu.queueFamily.compute.value()) : "x");
 
   // . Return if valid gpu has been found
   AbortIfMsg((maxScore < 1), "Suitable GPU not found!");
@@ -237,17 +238,10 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   Device_t device;
 
   // . Queues' Create Infos
-  // NOTE: If graphics, compute or present queues comes from the same family
-  // register it only once
   float const                          queuePriority = 1.0f;
   std::vector<VkDeviceQueueCreateInfo> queueCIs;
   queueCIs.reserve(4);
-  std::set<uint32_t> uniqueIndices {};
-  if (gpu.graphicsIdx.has_value()) uniqueIndices.emplace(gpu.graphicsIdx.value());
-  if (gpu.computeIdx.has_value()) uniqueIndices.emplace(gpu.computeIdx.value());
-  if (gpu.transferIdx.has_value()) uniqueIndices.emplace(gpu.transferIdx.value());
-  if (gpu.presentIdx.has_value()) uniqueIndices.emplace(gpu.presentIdx.value());
-  for (uint32_t queueFamily : uniqueIndices) {
+  for (uint32_t queueFamily : getUniqueQueueFamilies(gpu)) {
     queueCIs.push_back(VkDeviceQueueCreateInfo {
       .sType            = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
       .queueFamilyIndex = queueFamily,
@@ -272,21 +266,21 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   VkCheck(vkCreateDevice(gpu.handle, &deviceCI, nullptr, &device.handle));
 
   // . Pick required queues and command pool
-  if (gpu.graphicsIdx.has_value()) {
-    device.graphicsCP = createCommandPool(device, gpu.graphicsIdx.value());
-    vkGetDeviceQueue(device.handle, gpu.graphicsIdx.value(), 0, &device.graphicsQ);
+  if (gpu.queueFamily.graphics.has_value()) {
+    device.cmdpool.graphics = createCommandPool(device, gpu.queueFamily.graphics.value());
+    vkGetDeviceQueue(device.handle, gpu.queueFamily.graphics.value(), 0, &device.queue.graphics);
   }
-  if (gpu.computeIdx.has_value()) {
-    device.computeCP = createCommandPool(device, gpu.computeIdx.value());
-    vkGetDeviceQueue(device.handle, gpu.computeIdx.value(), 0, &device.computeQ);
+  if (gpu.queueFamily.present.has_value()) {
+    device.cmdpool.present = createCommandPool(device, gpu.queueFamily.present.value());
+    vkGetDeviceQueue(device.handle, gpu.queueFamily.present.value(), 0, &device.queue.present);
   }
-  if (gpu.transferIdx.has_value()) {
-    device.transferCP = createCommandPool(device, gpu.transferIdx.value());
-    vkGetDeviceQueue(device.handle, gpu.transferIdx.value(), 0, &device.transferQ);
+  if (gpu.queueFamily.transfer.has_value()) {
+    device.cmdpool.transfer = createCommandPool(device, gpu.queueFamily.transfer.value());
+    vkGetDeviceQueue(device.handle, gpu.queueFamily.transfer.value(), 0, &device.queue.transfer);
   }
-  if (gpu.presentIdx.has_value()) {
-    device.presentCP = createCommandPool(device, gpu.presentIdx.value());
-    vkGetDeviceQueue(device.handle, gpu.presentIdx.value(), 0, &device.presentQ);
+  if (gpu.queueFamily.compute.has_value()) {
+    device.cmdpool.compute = createCommandPool(device, gpu.queueFamily.compute.value());
+    vkGetDeviceQueue(device.handle, gpu.queueFamily.compute.value(), 0, &device.queue.compute);
   }
 
   device.pGpu = &gpu;
@@ -297,10 +291,10 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
 
 void destroyDevice(Device_t &device)
 {
-  if (device.graphicsCP) vkDestroyCommandPool(device.handle, device.graphicsCP, nullptr);
-  if (device.computeCP) vkDestroyCommandPool(device.handle, device.computeCP, nullptr);
-  if (device.transferCP) vkDestroyCommandPool(device.handle, device.transferCP, nullptr);
-  if (device.presentCP) vkDestroyCommandPool(device.handle, device.presentCP, nullptr);
+  if (device.cmdpool.graphics) vkDestroyCommandPool(device.handle, device.cmdpool.graphics, nullptr);
+  if (device.cmdpool.present) vkDestroyCommandPool(device.handle, device.cmdpool.present, nullptr);
+  if (device.cmdpool.transfer) vkDestroyCommandPool(device.handle, device.cmdpool.transfer, nullptr);
+  if (device.cmdpool.compute) vkDestroyCommandPool(device.handle, device.cmdpool.compute, nullptr);
 
   vkDestroyDevice(device.handle, nullptr);
   device = Device_t {};
@@ -570,14 +564,17 @@ void destroySwapChain(SwapChain_t &swapchain, bool justForRecreation)
 
 SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
 {
-  auto const &gpu      = *device.pGpu;
+  Assert(device.pGpu);
+  auto const &gpu = *device.pGpu;
+  Assert(gpu.pInstance);
   auto const &instance = *gpu.pInstance;
 
   VkSwapchainKHR oldSwapChainHandle = oldSwapChain.handle;
   SwapChain_t    swapchain          = std::move(oldSwapChain);
 
-  bool const        gpDiffQueue = device.graphicsQ != device.presentQ;
-  std::vector const gpIndices   = { device.pGpu->graphicsIdx.value(), device.pGpu->presentIdx.value() };
+  // . Get unique queues
+  auto const uFamilies  = getUniqueQueueFamilies(gpu);
+  bool const manyQueues = uFamilies.size() > 1;
 
   // . Get supported settings
   auto const &SS  = gpu.surfSupp;
@@ -662,23 +659,20 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
 
     .presentMode    = swapchain.presentMode,
     .preTransform   = swapchain.preTransformFlag,    // -> i.e. Globally flips 90 degrees
-    .compositeAlpha = swapchain.compositeAlphaFlag,  // -> Blending with other
-                                                     // windows, Opaque = None/Ignore
+    .compositeAlpha = swapchain.compositeAlphaFlag,  // -> Blending with other windows, Opaque = None/Ignore
 
-    .imageArrayLayers = 1,  // -> Always 1 unless you are developing a
-                            // stereoscopic 3D application.
-    .minImageCount   = swapchain.minImageCount,
-    .imageExtent     = swapchain.extent2D,
-    .imageFormat     = swapchain.colorFormat,
-    .imageColorSpace = swapchain.colorSpace,
-    .imageUsage      = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | swapchain.extraImageUsageFlags,
+    .imageArrayLayers = 1,  // -> Always 1 unless you are developing a stereoscopic 3D application.
+    .minImageCount    = swapchain.minImageCount,
+    .imageExtent      = swapchain.extent2D,
+    .imageFormat      = swapchain.colorFormat,
+    .imageColorSpace  = swapchain.colorSpace,
+    .imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | swapchain.extraImageUsageFlags,
 
-    .imageSharingMode      = gpDiffQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
-    .queueFamilyIndexCount = gpDiffQueue ? GetCountU32(gpIndices) : 0,
-    .pQueueFamilyIndices   = gpDiffQueue ? GetData(gpIndices) : nullptr,
+    .imageSharingMode      = manyQueues ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+    .queueFamilyIndexCount = manyQueues ? GetCountU32(uFamilies) : 0,
+    .pQueueFamilyIndices   = manyQueues ? GetData(uFamilies) : nullptr,
 
-    .oldSwapchain = swapchain.handle  // -> Ensure that we can still present
-                                      // already acquired images
+    .oldSwapchain = swapchain.handle  // -> Ensure that we can still present already acquired images
   };
   VkCheck(vkCreateSwapchainKHR(device.handle, &swapchainCI, nullptr, &swapchain.handle));
 

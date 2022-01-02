@@ -43,7 +43,14 @@ struct Gpu_t
   VkPhysicalDeviceMemoryProperties memory;
   VkPhysicalDeviceFeatures         features;
   VkPhysicalDeviceProperties       properties;
-  std::optional<uint32_t>          graphicsIdx = {}, presentIdx = {}, computeIdx = {}, transferIdx = {};
+
+  struct
+  {
+    std::optional<uint32_t> graphics = {};
+    std::optional<uint32_t> present  = {};
+    std::optional<uint32_t> transfer = {};
+    std::optional<uint32_t> compute  = {};
+  } queueFamily;
 
   std::vector<const char *> exts = { "VK_KHR_portability_subset", VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
@@ -55,10 +62,22 @@ struct Gpu_t
 struct Device_t
 {
   VkDevice handle = VK_NULL_HANDLE;
-  // VkCommandPool commandPool = VK_NULL_HANDLE;
-  VkCommandPool graphicsCP = VK_NULL_HANDLE, presentCP = VK_NULL_HANDLE, computeCP = VK_NULL_HANDLE,
-                transferCP = VK_NULL_HANDLE;
-  VkQueue graphicsQ = VK_NULL_HANDLE, presentQ = VK_NULL_HANDLE, computeQ = VK_NULL_HANDLE, transferQ = VK_NULL_HANDLE;
+
+  struct
+  {
+    VkCommandPool graphics = VK_NULL_HANDLE;
+    VkCommandPool present  = VK_NULL_HANDLE;
+    VkCommandPool transfer = VK_NULL_HANDLE;
+    VkCommandPool compute  = VK_NULL_HANDLE;
+  } cmdpool;
+
+  struct
+  {
+    VkQueue graphics = VK_NULL_HANDLE;
+    VkQueue present  = VK_NULL_HANDLE;
+    VkQueue transfer = VK_NULL_HANDLE;
+    VkQueue compute  = VK_NULL_HANDLE;
+  } queue;
 
   Gpu_t const *pGpu = nullptr;
 };

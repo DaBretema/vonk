@@ -21,7 +21,7 @@ void       destroyInstance(Instance_t &instance);
 
 // GPUs (PHYSICAL DEVICEs)
 //-----------------------------------------------
-Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableCompute, bool enableTransfer);
+Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableTransfer, bool enableCompute);
 
 // DEVICEs
 //-----------------------------------------------
@@ -139,11 +139,13 @@ inline Buffer_t createBuffer(
 //---
 inline void copyBuffer(Device_t const &device, Buffer_t const &src, Buffer_t &dst)
 {
+  auto const pool = device.cmdpool.transfer ? device.cmdpool.transfer : device.cmdpool.graphics;
+
   // . Allocate
   VkCommandBufferAllocateInfo allocInfo {
     .sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
     .level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    .commandPool        = device.transferCP,
+    .commandPool        = pool,
     .commandBufferCount = 1,
   };
   VkCommandBuffer cmd;
@@ -169,12 +171,12 @@ inline void copyBuffer(Device_t const &device, Buffer_t const &src, Buffer_t &ds
     .commandBufferCount = 1,
     .pCommandBuffers    = &cmd,
   };
-  auto const queue = device.transferQ ? device.transferQ : device.graphicsQ;
+  auto const queue = device.queue.transfer ? device.queue.transfer : device.queue.graphics;
   vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
   vkQueueWaitIdle(queue);  // There is some room to improve using 'vkWaitForFences'-logic
 
   // . Free
-  vkFreeCommandBuffers(device.handle, device.transferCP, 1, &cmd);
+  vkFreeCommandBuffers(device.handle, pool, 1, &cmd);
 }
 //---
 inline void destroyBuffer(Device_t const &device, Buffer_t const &buff)
