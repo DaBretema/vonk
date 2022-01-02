@@ -12,7 +12,7 @@ namespace vonk
 
 //-----------------------------------------------
 
-Mesh_t const &Vonk::createMesh(std::vector<Vertex_t> const &verticesData)
+Mesh_t const &Vonk::createMesh(std::vector<uint32_t> const &indices, std::vector<Vertex_t> const &vertices)
 {
   // @DANI : Change this for a "trace and fill the gaps"-pattern, basically a stack of removed IDs;
   static uint32_t meshCountID = 0;
@@ -25,7 +25,7 @@ Mesh_t const &Vonk::createMesh(std::vector<Vertex_t> const &verticesData)
     meshID = meshCountID++;
   }
 
-  mMeshes[meshID] = vonk::createMesh(mDevice, verticesData);
+  mMeshes[meshID] = vonk::createMesh(mDevice, indices, vertices);
   return mMeshes[meshID];
 }
 

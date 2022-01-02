@@ -16,14 +16,26 @@
 //-----------------------------------------------
 
 // Vector C++ to C helpers
-#define GetSizeOf(v)            (v.size() < 1 ? v.size() : v.size() * sizeof(v.at(0)))
-#define GetSizeOfU32(v)         static_cast<uint32_t>(GetSizeOf(v))
-#define GetSizeOfAs(newType, v) static_cast<newType>(GetSizeOf(v))
-#define GetCount(v)             v.size()
-#define GetCountU32(v)          static_cast<uint32_t>(GetCount(v))
-#define GetCountAs(newType, v)  static_cast<newType>(GetCount(v))
-#define GetData(v)              v.data()
-#define GetDataAs(newType, v)   reinterpret_cast<newType>(GetData(v))
+#define GetSizeOfFirst(v)            (v.size() < 1 ? 0u : sizeof(v.at(0)))
+#define GetSizeOfFirstU32(v)         static_cast<uint32_t>(GetSizeOfFirst(v))
+#define GetSizeOfFirstAs(newType, v) static_cast<newType>(GetSizeOfFirst(v))
+#define GetSizeOf(v)                 (v.size() < 1 ? v.size() : v.size() * sizeof(v.at(0)))
+#define GetSizeOfU32(v)              static_cast<uint32_t>(GetSizeOf(v))
+#define GetSizeOfAs(newType, v)      static_cast<newType>(GetSizeOf(v))
+#define GetCount(v)                  v.size()
+#define GetCountU32(v)               static_cast<uint32_t>(GetCount(v))
+#define GetCountAs(newType, v)       static_cast<newType>(GetCount(v))
+#define GetData(v)                   v.data()
+#define GetDataAs(newType, v)        reinterpret_cast<newType>(GetData(v))
+
+struct DataInfo_t
+{
+  uint32_t    elemSize = 0u;
+  uint32_t    count    = 0;
+  void const *data     = nullptr;
+};
+DataInfo_t GetDataInfo(auto const &v) { return { GetSizeOfFirstU32(v), GetCountU32(v), GetDataAs(void const *, v) }; }
+// #define GetDataInfo(v) std::forward_as_tuple(GetSizeOfFirst(v), GetCountU32(v), GetData(v))
 
 //-----------------------------------------------
 

@@ -40,9 +40,18 @@ int main()
   };
 
   // ::: Scene 2
-  auto const mesh = vonk.createMesh({ { { 0.0f, -0.25f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-                                      { { 0.25f, 0.25f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-                                      { { -0.25f, 0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f } } });
+  float constexpr meshSize = 0.5f;
+  auto const mesh          = vonk.createMesh(
+    // Indices
+    // { 0, 1, 2, 2, 3, 0 },  // CW
+    { 0, 3, 2, 0, 2, 1 },  // CCW
+    // Vertices
+    {
+      { { -meshSize, meshSize, 0.0f }, { 1.0f, 0.0f, 0.0f } },   // 0
+      { { meshSize, meshSize, 0.0f }, { 0.0f, 1.0f, 0.0f } },    // 1
+      { { meshSize, -meshSize, 0.0f }, { 0.0f, 0.0f, 1.0f } },   // 2
+      { { -meshSize, -meshSize, 0.0f }, { 1.0f, 1.0f, 1.0f } },  // 3
+    });
 
   vonk::DrawPipelineData_t pipelineCI2;
   pipelineCI2.useMeshes          = true;

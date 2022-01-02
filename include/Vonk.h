@@ -26,7 +26,7 @@ public:
   inline void iterScenes() { mActivePipeline = (mActivePipeline + 1) % mPipelines.size(); }
 
   // . Meshes
-  Mesh_t const &createMesh(std::vector<Vertex_t> const &data);
+  Mesh_t const &createMesh(std::vector<uint32_t> const &indices, std::vector<Vertex_t> const &vertices);
   void          drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh);
 
   // . Shaders

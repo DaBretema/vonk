@@ -374,6 +374,7 @@ auto static inline InputStateAssembly()
 struct Mesh_t
 {
   // std::vector<Vertex_t> data = {};
+  Buffer_t indices;
   Buffer_t vertices;
 };
 

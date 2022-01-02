@@ -184,60 +184,59 @@ inline void destroyBuffer(Device_t const &device, Buffer_t const &buff)
   vkDestroyBuffer(device.handle, buff.handle, nullptr);
   vkFreeMemory(device.handle, buff.memory, nullptr);
 }
-
-// VERTEX BUFFERs
-//-----------------------------------------------
-inline Mesh_t createMesh(Device_t const &device, std::vector<Vertex_t> const &vertices)
+//---
+inline Buffer_t createBufferStaging(Device_t const &device, DataInfo_t di, VkBufferUsageFlags usage)
 {
-  Assert(device.pGpu);
-
   // . Create
-  auto const buffHost = createBuffer(
-    device,
-    sizeof(Vertex_t),
-    GetCountU32(vertices),
-    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  auto const hostUsage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  auto const hostProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  auto       buffHost  = createBuffer(device, di.elemSize, di.count, hostUsage, hostProps);
 
-  auto buffDev = createBuffer(
-    device,
-    sizeof(Vertex_t),
-    GetCountU32(vertices),
-    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  auto const devUsage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage;
+  auto const devProps = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  auto       buffDev  = createBuffer(device, di.elemSize, di.count, devUsage, devProps);
 
   // . Populate the host one
   void *data = nullptr;
-  vkMapMemory(device.handle, buffHost.memory, 0, GetSizeOfU32(vertices), 0, &data);
-  memcpy(data, vertices.data(), GetSizeOf(vertices));
-#if 1
-  auto const  dptr = static_cast<Vertex_t *>(data);
-  std::string ds   = "";
-  for (size_t i = 0; i < GetCount(vertices); ++i) {
-    ds += fmt::format("\n{} - P : {} C : {}", i, glm::to_string((dptr + i)->pos), glm::to_string((dptr + i)->color));
-  }
-#endif
+  vkMapMemory(device.handle, buffHost.memory, 0, di.elemSize * di.count, 0, &data);
+  memcpy(data, di.data, di.elemSize * di.count);
   vkUnmapMemory(device.handle, buffHost.memory);
 
   // . Copy from Host to Dev and clean the Host one
   copyBuffer(device, buffHost, buffDev);
   destroyBuffer(device, buffHost);
 
+  return buffDev;
+}
+
+// VERTEX BUFFERs
+//-----------------------------------------------
+inline Mesh_t
+  createMesh(Device_t const &device, std::vector<uint32_t> const &indices, std::vector<Vertex_t> const &vertices)
+{
   Mesh_t mesh;
-  mesh.vertices = buffDev;
+  mesh.indices  = createBufferStaging(device, GetDataInfo(indices), VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+  mesh.vertices = createBufferStaging(device, GetDataInfo(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
   return mesh;
 }
+//---
 inline void destroyMesh(Device_t const &device, Mesh_t &mesh)
 {
+  destroyBuffer(device, mesh.indices);
   destroyBuffer(device, mesh.vertices);
-  // mesh.data.clear();
 }
+//---
 inline void drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh)
 {
-  VkBuffer     buffers[] = { mesh.vertices.handle };
-  VkDeviceSize offsets[] = { 0 };
-  vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
-  vkCmdDraw(cmd, mesh.vertices.count, 1, 0, 0);
+  VkBuffer     vertexBuffers[] = { mesh.vertices.handle };
+  VkDeviceSize offsets[]       = { 0 };
+  vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+  vkCmdBindIndexBuffer(cmd, mesh.indices.handle, 0, VK_INDEX_TYPE_UINT32);  // VK_INDEX_TYPE_UINT32
+  vkCmdDrawIndexed(cmd, mesh.indices.count, 1, 0, 0, 0);
+
+  // vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+  // vkCmdDraw(cmd, mesh.vertices.count, 1, 0, 0);
 }
+//---
 
 }  // namespace vonk
