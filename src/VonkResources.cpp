@@ -3,13 +3,11 @@
 namespace vonk
 {  //
 
-//-----------------------------------------------
+//=============================================================================
 
-//
-// // === DEBUGGER
-//
+// === DEBUGGER
 
-//-----------------------------------------------
+//-------------------------------------
 
 VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
   VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
@@ -36,7 +34,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
   return VK_FALSE;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 static inline VkDebugUtilsMessengerCreateInfoEXT sDebugMessengerCI {
   .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -56,13 +54,13 @@ static inline VkDebugUtilsMessengerCreateInfoEXT sDebugMessengerCI {
   .flags     = 0,        // Mandatory
 };
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === INSTANCEs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === INSTANCEs
+
+//-------------------------------------
 
 Instance_t createInstance(const char *title, uint32_t apiVersion)
 {
@@ -111,7 +109,7 @@ Instance_t createInstance(const char *title, uint32_t apiVersion)
   return instance;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void destroyInstance(Instance_t &instance)
 {
@@ -123,13 +121,14 @@ void destroyInstance(Instance_t &instance)
 
   instance = Instance_t {};
 }
-//-----------------------------------------------
 
-//
-// // === GPUs (PHYSICAL DEVICEs)
-//
+//-------------------------------------
 
-//-----------------------------------------------
+//=============================================================================
+
+// === GPUs (PHYSICAL DEVICEs)
+
+//-------------------------------------
 
 Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableTransfer, bool enableCompute)
 {
@@ -225,13 +224,13 @@ Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, boo
   return outGpu;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === DEVICEs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === DEVICEs
+
+//-------------------------------------
 
 Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
 {
@@ -287,7 +286,7 @@ Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu)
   return device;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void destroyDevice(Device_t &device)
 {
@@ -300,13 +299,32 @@ void destroyDevice(Device_t &device)
   device = Device_t {};
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === RENDER PASSes
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === COMMAND POOLs
+
+//-------------------------------------
+
+VkCommandPool createCommandPool(Device_t const &device, uint32_t idx)
+{
+  VkCommandPoolCreateInfo const cmdPoolCI {
+    .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .queueFamilyIndex = idx,
+  };
+  VkCommandPool cmdPool;
+  VkCheck(vkCreateCommandPool(device.handle, &cmdPoolCI, nullptr, &cmdPool));
+  return cmdPool;
+};
+
+//-------------------------------------
+
+//=============================================================================
+
+// === RENDER PASSes
+
+//-------------------------------------
 
 VkRenderPass createRenderPass(VkDevice device, RenderPassData_t const &rpd)
 {
@@ -325,7 +343,7 @@ VkRenderPass createRenderPass(VkDevice device, RenderPassData_t const &rpd)
   return renderpass;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 VkRenderPass createDefaultRenderPass(VkDevice device, VkFormat colorFormat, VkFormat depthFormat)
 {
@@ -405,13 +423,13 @@ VkRenderPass createDefaultRenderPass(VkDevice device, VkFormat colorFormat, VkFo
   return vonk::createRenderPass(device, rpd);
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === TEXTUREs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === TEXTUREs
+
+//-------------------------------------
 
 Texture_t createTexture(
   VkDevice                                device,
@@ -468,7 +486,7 @@ Texture_t createTexture(
   return tex;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void destroyTexture(VkDevice device, Texture_t const &tex)
 {
@@ -477,17 +495,17 @@ void destroyTexture(VkDevice device, Texture_t const &tex)
   vkDestroyImage(device, tex.image, nullptr);
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 bool isEmptyTexture(Texture_t const &tex) { return !tex.view or !tex.memory or !tex.image; }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === SEMAPHOREs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === SEMAPHOREs
+
+//-------------------------------------
 
 VkSemaphore createSemaphore(VkDevice device)
 {
@@ -500,15 +518,11 @@ VkSemaphore createSemaphore(VkDevice device)
   return semaphore;
 }
 
-//-----------------------------------------------
+//=============================================================================
 
-//-----------------------------------------------
+// === FENCEs
 
-//
-// // === FENCEs
-//
-
-//-----------------------------------------------
+//-------------------------------------
 
 VkFence createFence(VkDevice device)
 {
@@ -522,15 +536,13 @@ VkFence createFence(VkDevice device)
   return fence;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//-----------------------------------------------
+//=============================================================================
 
-//
-// // === SWAP CHAIN
-//
+// === SWAP CHAIN
 
-//-----------------------------------------------
+//-------------------------------------
 
 void destroySwapChain(SwapChain_t &swapchain, bool justForRecreation)
 {
@@ -560,7 +572,7 @@ void destroySwapChain(SwapChain_t &swapchain, bool justForRecreation)
   swapchain = SwapChain_t {};
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
 {
@@ -578,7 +590,7 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
 
   // . Get supported settings
   auto const &SS  = gpu.surfSupp;
-  swapchain.vsync = true;  // [***] to get from some user settings
+  swapchain.vsync = true;  // [***] to get from some user settings  // @DANI
   // ... Min number of images
   swapchain.minImageCount = SS.caps.minImageCount + 1;
   if ((SS.caps.maxImageCount > 0) and (swapchain.minImageCount > SS.caps.maxImageCount)) {
@@ -597,13 +609,13 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
   }
   // ... Transformation
   if (SS.caps.supportedTransforms & swapchain.preTransformFlag) {
-    swapchain.preTransformFlag = swapchain.preTransformFlag;  // [***] to get from some user settings
+    swapchain.preTransformFlag = swapchain.preTransformFlag;  // [***] to get from some user settings  // @DANI
   } else {
     swapchain.preTransformFlag = SS.caps.currentTransform;
   }
   // ... Alpha Composite
   if (SS.caps.supportedCompositeAlpha & swapchain.compositeAlphaFlag) {
-    swapchain.compositeAlphaFlag = swapchain.compositeAlphaFlag;  // [***] to get from some user settings
+    swapchain.compositeAlphaFlag = swapchain.compositeAlphaFlag;  // [***] to get from some user settings  // @DANI
   } else {
     for (auto &compositeAlphaFlag : {
            VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
@@ -628,9 +640,9 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
   //    Render as fast as possible while still avoiding tearing : *almost* vsync + triple-buffer
   //    NOTE: Do not use it on mobiles due to power-consumption !!
   swapchain.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // fallback
-  if (!swapchain.vsync) {                            // [***] to get from some user settings
+  if (!swapchain.vsync) {                            // [***] to get from some user settings  // @DANI
     if (std::find(SS.presentModes.begin(), SS.presentModes.end(), swapchain.presentMode) != SS.presentModes.end()) {
-      swapchain.presentMode = swapchain.presentMode;  // [***] to get from some user settings
+      swapchain.presentMode = swapchain.presentMode;  // [***] to get from some user settings  // @DANI
     }
   }
   // ... Image Formats
@@ -642,8 +654,8 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
     }
   }
   if (isValidSurfaceFormat) {
-    swapchain.colorFormat = swapchain.colorFormat;  // [***] to get from some user settings
-    swapchain.colorSpace  = swapchain.colorSpace;   // [***] to get from some user settings
+    swapchain.colorFormat = swapchain.colorFormat;  // [***] to get from some user settings  // @DANI
+    swapchain.colorSpace  = swapchain.colorSpace;   // [***] to get from some user settings  // @DANI
   } else {
     swapchain.colorFormat = SS.formats[0].format;
     swapchain.colorSpace  = SS.formats[0].colorSpace;
@@ -723,9 +735,9 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
     VK_IMAGE_ASPECT_DEPTH_BIT);
 
   // . Setup default framebuffers
-  VkImageView attachments[2];
-  attachments[1]                              = swapchain.defaultDepthTexture.view;  // Depth
-  VkFramebufferCreateInfo const frameBufferCI = {
+  VkImageView attachments[2] = { VK_NULL_HANDLE, swapchain.defaultDepthTexture.view };
+  // attachments[1] = swapchain.defaultDepthTexture.view;  // Depth
+  VkFramebufferCreateInfo const frameBufferCI {
     .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
     .pNext           = NULL,
     .renderPass      = swapchain.defaultRenderPass,
@@ -737,8 +749,7 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
   };
   swapchain.defaultFrameBuffers.resize(swapchain.minImageCount);
   for (uint32_t i = 0; i < swapchain.defaultFrameBuffers.size(); ++i) {
-    attachments[0] = swapchain.views[i];  // Color : 'Links' with the
-                                          // image-views of the swap-chain
+    attachments[0] = swapchain.views[i];  // Color : 'Links' with the image-views of the swap-chain
     VkCheck(vkCreateFramebuffer(device.handle, &frameBufferCI, nullptr, &swapchain.defaultFrameBuffers[i]));
   }
 
@@ -761,15 +772,17 @@ SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain)
   return swapchain;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === SHADERs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === SHADERs
+
+//-------------------------------------
 
 #define VONK_SHADER_CACHE 0
+
+//-------------------------------------
 
 Shader_t createShader(Device_t const &device, std::string const &name, VkShaderStageFlagBits stage)
 {
@@ -825,7 +838,7 @@ Shader_t createShader(Device_t const &device, std::string const &name, VkShaderS
 #endif
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 DrawShader_t createDrawShader(
   Device_t const &   device,
@@ -837,25 +850,32 @@ DrawShader_t createDrawShader(
 {
   DrawShader_t ds;
 
-  Assert(!vert.empty() and !frag.empty());
+  bool const availableTess = device.pGpu->features.tessellationShader;
+  bool const availableGeom = device.pGpu->features.geometryShader;
+
+  static auto constexpr onDrawErr = "Creating Draw Shader (just draw)    -> V : {} / F : {}";
+  static auto constexpr onTessErr = "Creating Draw Shader w/ Tesselation -> C : {} / E : {} / Available? {} ";
+  static auto constexpr onGeomErr = "Creating Draw Shader w/ Geometry    -> G : {}          / Available? {} ";
+
+  if (vert.empty() or frag.empty()) { AssertLogReturn(ds, onDrawErr, vert, frag, availableTess); }
   ds.vert = vonk::createShader(device, vert, VK_SHADER_STAGE_VERTEX_BIT);
   ds.frag = vonk::createShader(device, frag, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-  if (!tesc.empty() or !tesc.empty()) {
-    Assert(!tesc.empty() and !tesc.empty() and device.pGpu->features.tessellationShader);
+  if (!tesc.empty() or !tese.empty()) {
+    if (tesc.empty() or tese.empty() or !availableTess) { AssertLogReturn(ds, onTessErr, tesc, tese, availableTess); }
     ds.tesc = vonk::createShader(device, tesc, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT);
     ds.tese = vonk::createShader(device, tese, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT);
   }
 
   if (!geom.empty()) {
-    Assert(device.pGpu->features.geometryShader);
+    if (!availableGeom) { AssertLogReturn(ds, onGeomErr, geom, availableTess); }
     ds.geom = vonk::createShader(device, geom, VK_SHADER_STAGE_GEOMETRY_BIT);
   }
 
   return ds;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void destroyDrawShader(Device_t const &device, DrawShader_t const &ds)
 {
@@ -866,19 +886,19 @@ void destroyDrawShader(Device_t const &device, DrawShader_t const &ds)
   vkDestroyShaderModule(device.handle, ds.geom.module, nullptr);
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 // void destroyShader(Shader_t const &shader) {
 //   vkDestroyShaderModule(shader.pDevice->handle, shader.module, nullptr);
 // }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // === PIPELINEs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === PIPELINEs
+
+//-------------------------------------
 
 DrawPipeline_t createPipeline(
   DrawPipeline_t const &            oldPipeline,
@@ -902,8 +922,10 @@ DrawPipeline_t createPipeline(
       .sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
       .polygonMode = ci.ffPolygonMode,
       .cullMode    = ci.ffCullMode,
-      .frontFace   = ci.ffTriangleDirection,
-      .lineWidth   = 1.0f,
+      // .frontFace   = ci.ffTriangleDirection,
+      .frontFace = VK_FRONT_FACE_CLOCKWISE,  // @DANI : we prefer data as CCW, check why this still valid
+      // .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+      .lineWidth = 1.0f,
     };
 
     // . FIXED FUNCS - Multisampling : Default OFF == 1_BIT
@@ -1085,7 +1107,7 @@ DrawPipeline_t createPipeline(
   return pipeline;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void destroyPipeline(SwapChain_t const &swapchain, DrawPipeline_t const &pipeline)
 {
@@ -1096,6 +1118,8 @@ void destroyPipeline(SwapChain_t const &swapchain, DrawPipeline_t const &pipelin
   if (pipeline.renderpass != swapchain.defaultRenderPass) vkDestroyRenderPass(device, pipeline.renderpass, nullptr);
 }
 
-//-----------------------------------------------
+//-------------------------------------
+
+//=============================================================================
 
 }  // namespace vonk

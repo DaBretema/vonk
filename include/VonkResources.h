@@ -14,40 +14,46 @@
 namespace vonk
 {  //
 
-// INSTANCEs
 //-----------------------------------------------
+
+// INSTANCEs
+
 Instance_t createInstance(const char *title = "VONK", uint32_t apiVersion = VK_API_VERSION_1_2);
-void       destroyInstance(Instance_t &instance);
+
+void destroyInstance(Instance_t &instance);
+
+//-----------------------------------------------
 
 // GPUs (PHYSICAL DEVICEs)
-//-----------------------------------------------
+
 Gpu_t pickGpu(Instance_t &instance, bool enableGraphics, bool enablePresent, bool enableTransfer, bool enableCompute);
 
-// DEVICEs
 //-----------------------------------------------
+
+// DEVICEs
+
 Device_t createDevice(Instance_t const &instance, Gpu_t const &gpu);
-void     destroyDevice(Device_t &device);
+
+void destroyDevice(Device_t &device);
+
+//-----------------------------------------------
 
 // COMMAND POOL
+
+VkCommandPool createCommandPool(Device_t const &device, uint32_t idx);
+
 //-----------------------------------------------
-inline VkCommandPool createCommandPool(Device_t const &device, uint32_t idx)
-{
-  VkCommandPoolCreateInfo const cmdPoolCI {
-    .sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .queueFamilyIndex = idx,
-  };
-  VkCommandPool cmdPool;
-  VkCheck(vkCreateCommandPool(device.handle, &cmdPoolCI, nullptr, &cmdPool));
-  return cmdPool;
-};
 
 // RENDER PASSes
-//-----------------------------------------------
+
 VkRenderPass createRenderPass(VkDevice device, RenderPassData_t const &rpd);
+
 VkRenderPass createDefaultRenderPass(VkDevice device, VkFormat colorFormat, VkFormat depthFormat);
 
-// TEXTUREs
 //-----------------------------------------------
+
+// TEXTUREs
+
 Texture_t createTexture(
   VkDevice                                device,
   VkPhysicalDeviceMemoryProperties const &memProps,
@@ -56,40 +62,57 @@ Texture_t createTexture(
   VkSampleCountFlagBits const &           samples,
   VkImageUsageFlags const &               usage,
   VkImageAspectFlagBits const &           aspectMaskBits);
+
 void destroyTexture(VkDevice device, Texture_t const &tex);
+
 bool isEmptyTexture(Texture_t const &tex);
 
-// SEMAPHOREs
 //-----------------------------------------------
+
+// SEMAPHOREs
+
 VkSemaphore createSemaphore(VkDevice device);
 
-// FENCEs
 //-----------------------------------------------
+
+// FENCEs
+
 VkFence createFence(VkDevice device);
 
-// SWAP CHAIN
 //-----------------------------------------------
+
+// SWAP CHAIN
+
 SwapChain_t createSwapChain(Device_t const &device, SwapChain_t oldSwapChain);
-void        destroySwapChain(SwapChain_t &swapchain, bool justForRecreation = false);
+
+void destroySwapChain(SwapChain_t &swapchain, bool justForRecreation = false);
+
+//-----------------------------------------------
 
 // SHADERs
-//-----------------------------------------------
+
 #define VONK_SHADER_CACHE 0
-Shader_t     createShader(Device_t const &device, std::string const &name, VkShaderStageFlagBits stage);
+
+Shader_t createShader(Device_t const &device, std::string const &name, VkShaderStageFlagBits stage);
+
 DrawShader_t createDrawShader(
   Device_t const &   device,
   std::string const &vert,
   std::string const &frag,
-  std::string const &tesc,
-  std::string const &tese,
-  std::string const &geom);
+  std::string const &tesc = "",
+  std::string const &tese = "",
+  std::string const &geom = "");
+
 void destroyDrawShader(Device_t const &device, DrawShader_t const &ds);
+
 // inline void destroyShader(Shader_t const &shader) {
 //   vkDestroyShaderModule(shader.pDevice->handle, shader.module, nullptr);
 // }
 
-// PIPELINEs
 //-----------------------------------------------
+
+// PIPELINEs
+
 DrawPipeline_t createPipeline(
   DrawPipeline_t const &            oldPipeline,
   DrawPipelineData_t const &        ci,
@@ -98,10 +121,12 @@ DrawPipeline_t createPipeline(
   VkCommandPool                     commandPool,
   VkRenderPass                      renderpass,
   std::vector<VkFramebuffer> const &frameBuffers);
+
 void destroyPipeline(SwapChain_t const &swapchain, DrawPipeline_t const &pipeline);
 
-// BUFFERs
 //-----------------------------------------------
+
+// BUFFERs
 
 inline Buffer_t createBuffer(
   Device_t const &      device,
@@ -209,8 +234,10 @@ inline Buffer_t createBufferStaging(Device_t const &device, DataInfo_t di, VkBuf
   return buffDev;
 }
 
-// VERTEX BUFFERs
 //-----------------------------------------------
+
+// MESHes
+
 inline Mesh_t
   createMesh(Device_t const &device, std::vector<uint32_t> const &indices, std::vector<Vertex_t> const &vertices)
 {
@@ -219,18 +246,18 @@ inline Mesh_t
   mesh.vertices = createBufferStaging(device, GetDataInfo(vertices), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
   return mesh;
 }
-//---
+
 inline void destroyMesh(Device_t const &device, Mesh_t &mesh)
 {
   destroyBuffer(device, mesh.indices);
   destroyBuffer(device, mesh.vertices);
 }
-//---
+
 inline void drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh)
 {
   // ROOM TO IMPROVEMENT : https://developer.nvidia.com/vulkan-memory-management
 
-  /*
+  /* @DANI
    You should store multiple buffers, like the vertex and index buffer, into a single VkBuffer and use offsets in
    commands like vkCmdBindVertexBuffers. The advantage is that your data is more cache friendly in that case, because
    it's closer together. It is even possible to reuse the same chunk of memory for multiple resources if they are not
@@ -248,6 +275,7 @@ inline void drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh)
   vkCmdDraw(cmd, mesh.vertices.count, 1, 0, 0);
 #endif
 }
-//---
+
+//-----------------------------------------------
 
 }  // namespace vonk

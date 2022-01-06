@@ -44,10 +44,7 @@ void Vonk::drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh) { vonk::drawMesh(cm
 DrawShader_t const &
   Vonk::createDrawShader(std::string const &keyName, std::string const &vertexName, std::string const &fragmentName)
 {
-  mDrawShaders[keyName] = {
-    .vert = vonk::createShader(mDevice, vertexName, VK_SHADER_STAGE_VERTEX_BIT),
-    .frag = vonk::createShader(mDevice, fragmentName, VK_SHADER_STAGE_FRAGMENT_BIT),
-  };
+  mDrawShaders[keyName] = vonk::createDrawShader(mDevice, vertexName, fragmentName, "", "", "");
   return mDrawShaders[keyName];
 }
 

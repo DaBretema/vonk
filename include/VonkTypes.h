@@ -218,7 +218,7 @@ using CommandBuffersData_t = std::vector<CommandBufferData_t>;
 struct Shader_t
 {
   std::string                     path;
-  VkShaderModule                  module;
+  VkShaderModule                  module = VK_NULL_HANDLE;
   VkPipelineShaderStageCreateInfo stageCI;
 };
 
@@ -258,11 +258,10 @@ struct DrawPipelineData_t
   bool useMeshes = true;
 
   // . Static
-  VkPolygonMode         ffPolygonMode       = VK_POLYGON_MODE_FILL;
-  VkCullModeFlags       ffCullMode          = VK_CULL_MODE_BACK_BIT;
-  VkFrontFace           ffTriangleDirection = VK_FRONT_FACE_CLOCKWISE;
-  VkSampleCountFlagBits ffSamples           = VK_SAMPLE_COUNT_1_BIT;
-  VkCompareOp           ffDepthOp           = VK_COMPARE_OP_LESS;
+  VkPolygonMode         ffPolygonMode = VK_POLYGON_MODE_FILL;
+  VkCullModeFlags       ffCullMode    = VK_CULL_MODE_BACK_BIT;
+  VkSampleCountFlagBits ffSamples     = VK_SAMPLE_COUNT_1_BIT;
+  VkCompareOp           ffDepthOp     = VK_COMPARE_OP_LESS;
 
   DrawShader_t const *pDrawShader = nullptr;
   // ComputeShader_t *    pComputeShader;

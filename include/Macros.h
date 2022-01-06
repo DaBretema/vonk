@@ -82,6 +82,15 @@ DataInfo_t GetDataInfo(auto const &v) { return { GetSizeOfFirstU32(v), GetCountU
 
 //-----------------------------------------------
 
+#define AssertLogReturn(toRet, ...) \
+  {                                 \
+    LogErrorf(__VA_ARGS__);         \
+    Assert(0);                      \
+    return toRet;                   \
+  }
+
+//-----------------------------------------------
+
 //
 // // === VULKAN MACROS = vonk__
 //
