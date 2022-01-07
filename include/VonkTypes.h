@@ -313,11 +313,20 @@ struct Buffer_t
 
 struct Vertex_t
 {
-  glm::vec3 pos;
-  glm::vec3 color;
+  glm::vec3 vertex;     // 0
+  glm::vec2 uv;         // 1
+  glm::vec3 normal;     // 2
+  glm::vec3 tangent;    // 3
+  glm::vec3 bitangent;  // 4
+  glm::vec3 color;      // 5
 };
 
 //---
+
+#define Vonk_VertexAttrib(location, offsetName)                             \
+  {                                                                         \
+    location, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, offsetName) \
+  }
 
 auto static inline InputStateVertex(bool empty = false)
 {
@@ -325,18 +334,8 @@ auto static inline InputStateVertex(bool empty = false)
     { .binding = 0, .stride = sizeof(Vertex_t), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX }
   };
   static std::vector<VkVertexInputAttributeDescription> const attribs = {
-    {
-      .binding  = 0,
-      .location = 0,
-      .format   = VK_FORMAT_R32G32B32_SFLOAT,
-      .offset   = offsetof(Vertex_t, pos),
-    },
-    {
-      .binding  = 0,
-      .location = 1,
-      .format   = VK_FORMAT_R32G32B32_SFLOAT,
-      .offset   = offsetof(Vertex_t, color),
-    },
+    Vonk_VertexAttrib(0, vertex),  Vonk_VertexAttrib(1, uv),        Vonk_VertexAttrib(2, normal),
+    Vonk_VertexAttrib(3, tangent), Vonk_VertexAttrib(4, bitangent), Vonk_VertexAttrib(5, color),
   };
   static VkPipelineVertexInputStateCreateInfo const vertexFilled {
     .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -372,7 +371,6 @@ auto static inline InputStateAssembly()
 
 struct Mesh_t
 {
-  // std::vector<Vertex_t> data = {};
   Buffer_t indices;
   Buffer_t vertices;
 };

@@ -26,8 +26,15 @@ public:
   inline void iterScenes() { mActivePipeline = (mActivePipeline + 1) % mPipelines.size(); }
 
   // . Meshes
+  std::vector<Mesh_t> read3DFile(
+    std::string const &filepath,
+    uint32_t           optimizationLevel               = 3,
+    bool               recalculateUVs                  = false,
+    bool               recalculateNormals              = false,
+    bool               recalculateTangentsAndBitangets = false);
   Mesh_t const &createMesh(std::vector<uint32_t> const &indices, std::vector<Vertex_t> const &vertices);
   void          drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh);
+  void          drawMeshes(VkCommandBuffer cmd, std::vector<Mesh_t> const &meshes);
 
   // . Shaders
   DrawShader_t const &

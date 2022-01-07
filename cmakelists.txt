@@ -70,10 +70,10 @@ set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
 add_subdirectory(vendor/fmt)
 add_subdirectory(vendor/glm)
 add_subdirectory(vendor/glfw)
-# add_subdirectory(vendor/assimp)
+add_subdirectory(vendor/assimp)
 
 set(project_libs_incl ${Vulkan_INCLUDE_DIRS})
-set(project_libs fmt glm glfw ${Vulkan_LIBRARIES})
+set(project_libs fmt glm glfw assimp ${Vulkan_LIBRARIES})
 
 
 # ------------------------------------------------------------------------- #

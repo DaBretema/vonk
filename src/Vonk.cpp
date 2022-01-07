@@ -3,14 +3,114 @@
 #include "VonkTools.h"
 #include "VonkWindow.h"
 
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <assimp/config.h.in>
+
 namespace vonk
 {  //
 
-//
-// // MESHEs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === MESHEs
+
+//-------------------------------------
+
+std::vector<Mesh_t> Vonk::read3DFile(
+  std::string const &filepath,
+  uint32_t           optimizationLevel,
+  bool               recalculateUVs,
+  bool               recalculateNormals,
+  bool               recalculateTangentsAndBitangets)
+{
+  static Assimp::Importer importer = {};  // Expensive to initialize so create only once
+
+  // ::: Validate the path  @DANI !!
+
+  // ::: Prepare flags
+  bool const recalc = recalculateUVs || recalculateNormals || recalculateTangentsAndBitangets;
+
+  uint32_t const recalcComps = ((recalculateUVs) ? aiComponent_TEXCOORDS : 0)
+                               | ((recalculateNormals) ? aiComponent_NORMALS : 0)
+                               | ((recalculateTangentsAndBitangets) ? aiComponent_TANGENTS_AND_BITANGENTS : 0);
+
+  uint32_t const recalcFlags = (!recalc) ? 0
+                                         : aiProcess_RemoveComponent | ((recalculateUVs) ? aiProcess_GenUVCoords : 0)
+                                             | ((recalculateNormals) ? aiProcess_GenSmoothNormals : 0)
+                                             | ((recalculateTangentsAndBitangets) ? aiProcess_CalcTangentSpace : 0);
+
+  uint32_t const flags = aiProcess_ConvertToLeftHanded | aiProcess_GenBoundingBoxes | recalcFlags | (
+                           optimizationLevel==1 ? aiProcessPreset_TargetRealtime_Fast       :
+                           optimizationLevel==2 ? aiProcessPreset_TargetRealtime_Quality    :
+                           optimizationLevel==3 ? aiProcessPreset_TargetRealtime_MaxQuality : 0
+                         );
+
+  // ::: Set importer settings
+  // - http://assimp.sourceforge.net/lib_html/postprocess_8h.html
+
+  importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
+  importer.SetPropertyBool(AI_CONFIG_PP_PTV_NORMALIZE, true);  // No effect on hierarchy scenes
+  int const ignoredPrimitives = aiPrimitiveType::aiPrimitiveType_POINT | aiPrimitiveType::aiPrimitiveType_LINE;
+  importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, ignoredPrimitives);
+
+  importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, recalcComps);
+
+  if (recalc && (recalcComps & aiComponent_NORMALS)) {
+    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 175.f);
+  }
+
+  // ::: Prepare scene
+  auto const scene = importer.ReadFile(filepath, flags);
+  if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
+    LogErrorf("[ASSIMP] - Scene {} : ", filepath, importer.GetErrorString());
+    return {};
+  }
+
+  // ::: Get Meshes
+  std::vector<Mesh_t> meshes;
+  meshes.reserve(scene->mNumMeshes);
+  for (size_t i = 0; i < scene->mNumMeshes; ++i) {
+    aiMesh const *mesh = scene->mMeshes[i];
+    Assert(mesh);
+
+    // SXMesh_Info mde;
+    // mde.idx     = i;
+    // mde.name    = mesh->mName.C_Str();
+    // mde.matUUID = out.materials.at(mesh->mMaterialIndex).UUID;
+
+    std::vector<uint32_t> indices;
+    indices.reserve(mesh->mNumFaces * 3u);
+    for (size_t i = 0; i < mesh->mNumFaces; ++i)
+      if (mesh->mFaces[i].mNumIndices == 3)
+        for (auto j : { 0, 1, 2 }) indices.push_back(mesh->mFaces[i].mIndices[j]);
+
+    std::vector<Vertex_t> vertices;
+    vertices.reserve(mesh->mNumVertices);
+    for (size_t i = 0; i < mesh->mNumVertices; ++i) {
+      auto const &v = mesh->mVertices;
+      auto const &u = mesh->mTextureCoords[0];
+      auto const &n = mesh->mNormals;
+      auto const &t = mesh->mTangents;
+      auto const &b = mesh->mBitangents;
+      auto const &c = mesh->mColors[0];
+
+      Vertex_t out;
+      if (v) out.vertex = { v->x, v->y, v->z };
+      if (u) out.uv = { u->x, u->y };
+      if (n) out.normal = { n->x, n->y, n->z };
+      if (t) out.tangent = { t->x, t->y, t->z };
+      if (b) out.bitangent = { b->x, b->y, b->z };
+      if (c) out.color = { c->r, c->g, c->b };
+    }
+
+    meshes.push_back(vonk::createMesh(mDevice, indices, vertices));
+  }
+
+  return meshes;
+}
+
+//-------------------------------------
 
 Mesh_t const &Vonk::createMesh(std::vector<uint32_t> const &indices, std::vector<Vertex_t> const &vertices)
 {
@@ -29,17 +129,21 @@ Mesh_t const &Vonk::createMesh(std::vector<uint32_t> const &indices, std::vector
   return mMeshes[meshID];
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void Vonk::drawMesh(VkCommandBuffer cmd, Mesh_t const &mesh) { vonk::drawMesh(cmd, mesh); }
+void Vonk::drawMeshes(VkCommandBuffer cmd, std::vector<Mesh_t> const &meshes)
+{
+  for (auto const &mesh : meshes) vonk::drawMesh(cmd, mesh);
+}
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // SHADERs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === SHADERs
+
+//-------------------------------------
 
 DrawShader_t const &
   Vonk::createDrawShader(std::string const &keyName, std::string const &vertexName, std::string const &fragmentName)
@@ -48,7 +152,7 @@ DrawShader_t const &
   return mDrawShaders[keyName];
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 DrawShader_t const &Vonk::getDrawShader(std::string const &keyName)
 {
@@ -56,7 +160,7 @@ DrawShader_t const &Vonk::getDrawShader(std::string const &keyName)
   return mDrawShaders[keyName];
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 Shader_t const &Vonk::createComputeShader(std::string const &name)
 {
@@ -64,7 +168,7 @@ Shader_t const &Vonk::createComputeShader(std::string const &name)
   return mComputeShaders[name];
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 Shader_t const &Vonk::getComputeShader(std::string const &name)
 {
@@ -72,13 +176,13 @@ Shader_t const &Vonk::getComputeShader(std::string const &name)
   return mComputeShaders[name];
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // PIPELINEs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === PIPELINEs
+
+//-------------------------------------
 
 void Vonk::addPipeline(DrawPipelineData_t const &ci)
 {
@@ -93,17 +197,17 @@ void Vonk::addPipeline(DrawPipelineData_t const &ci)
     mSwapChain.defaultFrameBuffers));
 };
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // FRAMEs
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === FRAME OPs
+
+//-------------------------------------
 
 void Vonk::waitDevice() { vkDeviceWaitIdle(mDevice.handle); }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void Vonk::drawFrame()
 {
@@ -111,13 +215,11 @@ void Vonk::drawFrame()
 
   static size_t currFrame = 0;
 
-  //=====
-  //=====   PRECONDITIONS
+  // ::: Preconditions
   vkWaitForFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame], VK_TRUE, UINT64_MAX);
 
-  //=====
-  //=====   1. GET NEXT IMAGE TO PROCESS
-  // (1.1) Acquiere next image
+  // ::: 1. Get next image to process
+  // 1.1 : Acquiere next image
   uint32_t   imageIndex;
   auto const acquireRet = vkAcquireNextImageKHR(
     mDevice.handle,
@@ -126,27 +228,26 @@ void Vonk::drawFrame()
     mSwapChain.semaphores.present[currFrame],
     VK_NULL_HANDLE,
     &imageIndex);
-  // (1.2) Validate the swapchain state
+  // 1.2 : Validate the swapchain state
   if (acquireRet == VK_ERROR_OUT_OF_DATE_KHR) {
     recreateSwapChain();
     return;
   } else if (acquireRet != VK_SUCCESS && acquireRet != VK_SUBOPTIMAL_KHR) {
     LogError("Failed to acquire swap chain image!");
   }
-  // (1.3) Check if a previous frame is using this image (i.e. there is its fence to wait on)
+  // 1.3 : Check if a previous frame is using this image (i.e. there is its fence to wait on)
   if (mSwapChain.fences.acquire[imageIndex] != VK_NULL_HANDLE) {
     vkWaitForFences(mDevice.handle, 1, &mSwapChain.fences.acquire[imageIndex], VK_TRUE, UINT64_MAX);
   }
-  // (1.4) Mark the image as now being in use by this frame
+  // 1.4 : Mark the image as now being in use by this frame
   mSwapChain.fences.acquire[imageIndex] = mSwapChain.fences.submit[currFrame];
 
-  //=====
-  //=====   2. DRAW : Graphics Queue
-  // (2.1) Sync objects
+  // ::: 2. Draw ( Graphics Queue )
+  // 2.1 : Sync objects
   VkPipelineStageFlags const waitStages[]       = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
   VkSemaphore const          waitSemaphores[]   = { mSwapChain.semaphores.present[currFrame] };
   VkSemaphore const          signalSemaphores[] = { mSwapChain.semaphores.render[currFrame] };
-  // (2.2) Submit info
+  // 2.2 : Submit info
   VkSubmitInfo const submitInfo {
     .sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO,
     .pWaitDstStageMask    = waitStages,
@@ -157,13 +258,12 @@ void Vonk::drawFrame()
     .signalSemaphoreCount = 1,
     .pSignalSemaphores    = signalSemaphores,
   };
-  // (2.3) Reset fences right before asking for draw
+  // 2.3 : Reset fences right before asking for draw
   vkResetFences(mDevice.handle, 1, &mSwapChain.fences.submit[currFrame]);
   VkCheck(vkQueueSubmit(mDevice.queue.graphics, 1, &submitInfo, mSwapChain.fences.submit[currFrame]));
 
-  //=====
-  //=====   3. DUMP TO SCREEN : Present Queue
-  // (3.1) Info
+  // ::: 3. Dump to screen ( Present Queue )
+  // 3.1 : Info
   VkSwapchainKHR const   swapChains[] = { mSwapChain.handle };
   VkPresentInfoKHR const presentInfo {
     .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
@@ -174,9 +274,9 @@ void Vonk::drawFrame()
     .pImageIndices      = &imageIndex,
     .pResults           = nullptr,  // Optional
   };
-  // (3.2) Ask for dump into screen
+  // 3.2 : Ask for dump into screen
   auto const presentRet = vkQueuePresentKHR(mDevice.queue.present, &presentInfo);
-  // (3.3) Validate swapchain state
+  // 3.3 : Validate swapchain state
   if (presentRet == VK_ERROR_OUT_OF_DATE_KHR || presentRet == VK_SUBOPTIMAL_KHR || vonk::window::framebufferResized) {
     vonk::window::framebufferResized = false;  // move this variable to vonk::Vonk
     recreateSwapChain();
@@ -184,18 +284,17 @@ void Vonk::drawFrame()
     LogError("Failed to present swap chain image!");
   }
 
-  //=====
-  //=====   EXTRA TASKS
+  // ::: Extra tasks
   currFrame = (currFrame + 1) % sInFlightMaxFrames;
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // SWAPCHAIN
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === SWAPCHAIN
+
+//-------------------------------------
 
 void Vonk::destroySwapChainDependencies()
 {
@@ -213,7 +312,7 @@ void Vonk::destroySwapChainDependencies()
   }
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void Vonk::recreateSwapChain()
 {
@@ -235,13 +334,13 @@ void Vonk::recreateSwapChain()
   }
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
-//
-// // FLOW
-//
+//=============================================================================
 
-//-----------------------------------------------
+// === FLOW
+
+//-------------------------------------
 
 void Vonk::init()
 {
@@ -257,33 +356,31 @@ void Vonk::init()
   mSwapChain = vonk::createSwapChain(mDevice, mSwapChain);
 }
 
-//-----------------------------------------------
+//-------------------------------------
 
 void Vonk::cleanup()
 {
   // . Pipelines
-
   for (auto &pipeline : mPipelines) { vonk::destroyPipeline(mSwapChain, pipeline); }
 
   // . Meshes
-
   for (auto &[k, m] : mMeshes) {
     mRemovedMeshes.push(k);
     vonk::destroyMesh(mDevice, m);
   }
 
   // . Shaders
-
   for (auto const &[k, ds] : mDrawShaders) { vonk::destroyDrawShader(mDevice, ds); }
   for (auto const &[k, cs] : mComputeShaders) { vkDestroyShaderModule(mDevice.handle, cs.module, nullptr); }
 
   // . Context ¿?
-
   vonk::destroySwapChain(mSwapChain, false);
   vonk::destroyDevice(mDevice);
   vonk::destroyInstance(mInstance);
 }
 
-//-----------------------------------------------
+//-------------------------------------
+
+//=============================================================================
 
 }  // namespace vonk
