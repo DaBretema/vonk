@@ -20,12 +20,13 @@ VKAPI_ATTR VkBool32 VKAPI_CALL sDebugMessengerCallback(
 
   if (!CACHE[ID] && messageSeverity > VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
     fmt::print(
-      "\n ❗️ [VALIDATION LAYERS] - {} at {}{}"
-      "\n--------------------------------------------------------------------"
-      "------------\n{}\n",
+      "\n{}  [VALIDATION LAYERS] - {} at {}{}"
+      "\n-----------------------------------------------------------------"
+      "\n{}\n",
+      vonk::ToStr_DebugSeverityIcon.at(messageSeverity),
       vonk::ToStr_DebugSeverity.at(messageSeverity),
       vonk::ToStr_DebugType.at(messageType),
-      pUserData ? fmt::format("- {}", pUserData) : std::string { "" },
+      pUserData ? fmt::format(" : {}", pUserData) : std::string { "" },
       pCallbackData->pMessage);
 
     CACHE[ID] = true;

@@ -42,7 +42,7 @@ DataInfo_t GetDataInfo(auto const &v) { return { GetSizeOfFirstU32(v), GetCountU
 // Logging w/o format
 #define LogInfo(msg)  fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
 #define LogWarn(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define LogError(msg) fmt::print("⛔️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define LogError(msg) fmt::print("⛔️ ({}:{}) → {}\n", __FILE__, __LINE__, msg)
 #define Abort(msg) \
   LogError(msg);   \
   abort();

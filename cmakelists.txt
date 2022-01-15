@@ -1,28 +1,4 @@
 # ------------------------------------------------------------------------- #
-# GLOBAL FUNCTIONS
-# ------------------------------------------------------------------------- #
-
-function(COPY_FROM_TO_DIR src_dir dst_dir)
-    file(GLOB src_files ${src_dir}/*)
-    foreach(src_file IN LISTS src_files)
-        get_filename_component(file_and_ext ${src_file} NAME)
-        set(dst_file ${dst_dir}/${file_and_ext})
-#        MESSAGE(STATUS "[[[COPY_FROM_TO_DIR]]] :\n   * ${src_file}\n   * ${dst_file}")
-        add_custom_command(
-            TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy ${src_file} ${dst_file}
-        )
-    endforeach()
-endfunction()
-
-function(ADD_EXE_TEST test_name)
-    add_executable(${test_name} test/${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE ${project_libs} ${PROJECT_NAME})
-    add_test(COMMAND ${test_name})
-endfunction()
-
-
-# ------------------------------------------------------------------------- #
 # GLOBAL SETTINGS
 # ------------------------------------------------------------------------- #
 
@@ -36,6 +12,26 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Makefile and Ninja only
 set(CMAKE_CXX_FLAGS "")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wrange-loop-construct")
+
+
+# ------------------------------------------------------------------------- #
+# GLOBAL FUNCTIONS
+# ------------------------------------------------------------------------- #
+
+function(COPY_FROM_TO_DIR src_dir dst_dir)
+    file(GLOB src_files ${src_dir}/*)
+    foreach(src_file IN LISTS src_files)
+        get_filename_component(file_and_ext ${src_file} NAME)
+        set(dst_file ${dst_dir}/${file_and_ext})
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy ${src_file} ${dst_file})
+    endforeach()
+endfunction()
+
+function(ADD_EXE_TEST test_name)
+    add_executable(${test_name} test/${test_name}.cpp)
+    target_link_libraries(${test_name} PRIVATE ${project_libs} ${PROJECT_NAME})
+    add_test(COMMAND ${test_name})
+endfunction()
 
 
 # ------------------------------------------------------------------------- #
@@ -77,31 +73,28 @@ set(project_libs fmt glm glfw assimp ${Vulkan_LIBRARIES})
 
 
 # ------------------------------------------------------------------------- #
-# Shaders compilation and copy
+# SHADERS COMPILATION AND COPY
 # ------------------------------------------------------------------------- #
 
-set(shaders_src_dir "./assets/shaders")
-set(shaders_bin_dir "./assets/shaders")
+set(shaders_src_dir "${CMAKE_SOURCE_DIR}/assets/shaders")
+set(shaders_bin_dir "${CMAKE_BINARY_DIR}/assets/shaders")
 
 file(GLOB shaders_list ${shaders_src_dir}/*)
 
-add_custom_command(
-  COMMAND
+add_custom_command( COMMAND
     ${CMAKE_COMMAND} -E remove_directory ${shaders_bin_dir}
     ${CMAKE_COMMAND} -E make_directory ${shaders_bin_dir}
-  # MESSAGE(STATUS "[SHADERS] - Creating DIR : ${shaders_bin_dir}")
   OUTPUT ${shaders_bin_dir}
 )
 
 foreach(shader_src IN LISTS shaders_list)
   get_filename_component(filename_and_ext ${shader_src} NAME)
   set(shader_dst ${shaders_bin_dir}/${filename_and_ext}.spv)
-  MESSAGE(STATUS "[SHADERS] - Compiling:\n  From: ${shader_src}\n  To  : ${shader_dst}")
   add_custom_command(COMMAND ${glslc_executable} -o ${shader_dst} ${shader_src} OUTPUT ${shader_dst})
   list(APPEND shaders_spv_list ${shaders_bin_dir}/${filename_and_ext}.spv)
 endforeach()
 
-add_custom_target(shaders ALL DEPENDS ${shaders_spv_list}) # Seems like unneeded
+# # add_custom_target(shaders ALL DEPENDS ${shaders_spv_list}) # Seems like unneeded
 
 
 # ------------------------------------------------------------------------- #
@@ -115,8 +108,18 @@ add_library(${PROJECT_NAME} STATIC ${shaders_spv_list} ${SOURCE_FILES} ${HEADER_
 
 target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20 ) # -> PRIVATE (??)
 target_include_directories ( ${PROJECT_NAME} PUBLIC "./include" "./vendor" ${project_libs_incl}) # -> PRIVATE (??)
-target_link_libraries      ( ${PROJECT_NAME} PRIVATE ${project_libs}                           )
-# target_include_directories(${PROJECT_NAME} PRIVATE "./src" "./include" "./vendor" ${project_libs_incl})
+target_link_libraries      ( ${PROJECT_NAME} PUBLIC ${project_libs}                           ) # -> PRIVATE (??)
+
+
+# ------------------------------------------------------------------------- #
+# COPY MESHES ASSETS
+# ------------------------------------------------------------------------- #
+
+set(meshes_src_dir "${CMAKE_SOURCE_DIR}/assets/meshes")
+set(meshes_bin_dir "${CMAKE_BINARY_DIR}/assets/meshes")
+
+COPY_FROM_TO_DIR(${meshes_src_dir} ${meshes_bin_dir})
+
 
 # ------------------------------------------------------------------------- #
 # EXE and TESTING

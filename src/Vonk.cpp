@@ -8,6 +8,8 @@
 #include <assimp/scene.h>
 #include <assimp/config.h.in>
 
+#include <filesystem>
+
 namespace vonk
 {  //
 
@@ -27,18 +29,24 @@ std::vector<Mesh_t> Vonk::read3DFile(
   static Assimp::Importer importer = {};  // Expensive to initialize so create only once
 
   // ::: Validate the path  @DANI !!
+  auto const fp = std::filesystem::absolute(filepath);
+  if (!std::filesystem::exists(fp)) {
+    LogErrorf("File {} doesn't exist", fp.string());
+    return {};
+  }
 
   // ::: Prepare flags
+
   bool const recalc = recalculateUVs || recalculateNormals || recalculateTangentsAndBitangets;
 
   uint32_t const recalcComps = ((recalculateUVs) ? aiComponent_TEXCOORDS : 0)
                                | ((recalculateNormals) ? aiComponent_NORMALS : 0)
                                | ((recalculateTangentsAndBitangets) ? aiComponent_TANGENTS_AND_BITANGENTS : 0);
 
-  uint32_t const recalcFlags = (!recalc) ? 0
-                                         : aiProcess_RemoveComponent | ((recalculateUVs) ? aiProcess_GenUVCoords : 0)
-                                             | ((recalculateNormals) ? aiProcess_GenSmoothNormals : 0)
-                                             | ((recalculateTangentsAndBitangets) ? aiProcess_CalcTangentSpace : 0);
+  uint32_t const recalcFlags = (recalc) ? aiProcess_RemoveComponent | ((recalculateUVs) ? aiProcess_GenUVCoords : 0)
+                                            | ((recalculateNormals) ? aiProcess_GenSmoothNormals : 0)
+                                            | ((recalculateTangentsAndBitangets) ? aiProcess_CalcTangentSpace : 0)
+                                        : 0;
 
   uint32_t const flags = aiProcess_ConvertToLeftHanded | aiProcess_GenBoundingBoxes | recalcFlags | (
                            optimizationLevel==1 ? aiProcessPreset_TargetRealtime_Fast       :
@@ -49,11 +57,10 @@ std::vector<Mesh_t> Vonk::read3DFile(
   // ::: Set importer settings
   // - http://assimp.sourceforge.net/lib_html/postprocess_8h.html
 
-  importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
-  importer.SetPropertyBool(AI_CONFIG_PP_PTV_NORMALIZE, true);  // No effect on hierarchy scenes
-  int const ignoredPrimitives = aiPrimitiveType::aiPrimitiveType_POINT | aiPrimitiveType::aiPrimitiveType_LINE;
-  importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, ignoredPrimitives);
+  static int constexpr toIgnore = aiPrimitiveType::aiPrimitiveType_POINT | aiPrimitiveType::aiPrimitiveType_LINE;
 
+  importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
+  importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, toIgnore);
   importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, recalcComps);
 
   if (recalc && (recalcComps & aiComponent_NORMALS)) {
@@ -61,18 +68,21 @@ std::vector<Mesh_t> Vonk::read3DFile(
   }
 
   // ::: Prepare scene
-  auto const scene = importer.ReadFile(filepath, flags);
+  auto const scene = importer.ReadFile(filepath, 0);
   if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
-    LogErrorf("[ASSIMP] - Scene {} : ", filepath, importer.GetErrorString());
+    LogErrorf("[ASSIMP] - Scene {} : {}", filepath, importer.GetErrorString());
     return {};
   }
 
   // ::: Get Meshes
   std::vector<Mesh_t> meshes;
   meshes.reserve(scene->mNumMeshes);
+  LogInfof("NNNNNNNNNNNN {}", scene->mNumMeshes);
   for (size_t i = 0; i < scene->mNumMeshes; ++i) {
     aiMesh const *mesh = scene->mMeshes[i];
     Assert(mesh);
+
+    LogInfof("AAAAAAAAAAAAAAAAAAA {}", mesh->mName.C_Str());
 
     // SXMesh_Info mde;
     // mde.idx     = i;
@@ -81,8 +91,8 @@ std::vector<Mesh_t> Vonk::read3DFile(
 
     std::vector<uint32_t> indices;
     indices.reserve(mesh->mNumFaces * 3u);
-    for (size_t i = 0; i < mesh->mNumFaces; ++i)
-      if (mesh->mFaces[i].mNumIndices == 3)
+    if (mesh->mFaces[i].mNumIndices == 3)
+      for (size_t i = 0; i < mesh->mNumFaces; ++i)
         for (auto j : { 0, 1, 2 }) indices.push_back(mesh->mFaces[i].mIndices[j]);
 
     std::vector<Vertex_t> vertices;

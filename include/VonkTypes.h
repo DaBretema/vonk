@@ -323,19 +323,18 @@ struct Vertex_t
 
 //---
 
-#define Vonk_VertexAttrib(location, offsetName)                             \
-  {                                                                         \
-    location, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, offsetName) \
-  }
-
 auto static inline InputStateVertex(bool empty = false)
 {
   static std::vector<VkVertexInputBindingDescription> const bindings = {
     { .binding = 0, .stride = sizeof(Vertex_t), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX }
   };
   static std::vector<VkVertexInputAttributeDescription> const attribs = {
-    Vonk_VertexAttrib(0, vertex),  Vonk_VertexAttrib(1, uv),        Vonk_VertexAttrib(2, normal),
-    Vonk_VertexAttrib(3, tangent), Vonk_VertexAttrib(4, bitangent), Vonk_VertexAttrib(5, color),
+    { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, vertex) },
+    { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, uv) },
+    { 2, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, normal) },
+    { 3, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, tangent) },
+    { 4, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, bitangent) },
+    { 5, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vertex_t, color) },
   };
   static VkPipelineVertexInputStateCreateInfo const vertexFilled {
     .sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,

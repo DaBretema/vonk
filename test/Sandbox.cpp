@@ -92,7 +92,7 @@ int main()
 
   vonk.addPipeline(pipelineCI1);
   vonk.addPipeline(pipelineCI2);
-  vonk.addPipeline(pipelineCI3);
+  if (!dataScene3.empty()) vonk.addPipeline(pipelineCI3);
 
   //-------------------------------------
 

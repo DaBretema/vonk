@@ -6,6 +6,13 @@
 
 namespace vonk
 {
+inline static std::unordered_map<uint32_t, std::string_view> const ToStr_DebugSeverityIcon {
+  { VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT, "💬" },
+  { VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT, "ℹ️" },
+  { VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT, "⚠️" },
+  { VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT, "⛔️" },
+  { VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT, "❔" },
+};
 inline static std::unordered_map<uint32_t, std::string_view> const ToStr_DebugSeverity {
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT, "Verbose" },
   { VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT, "Info" },
