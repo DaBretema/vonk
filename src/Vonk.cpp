@@ -28,8 +28,10 @@ std::vector<Mesh_t> Vonk::read3DFile(
 {
   static Assimp::Importer importer = {};  // Expensive to initialize so create only once
 
-  // ::: Validate the path  @DANI !!
   auto const fp = std::filesystem::absolute(filepath);
+  LogInfof("Loading File: '{}' ...", fp.string());
+
+  // ::: Validate the path
   if (!std::filesystem::exists(fp)) {
     LogErrorf("File {} doesn't exist", fp.string());
     return {};
@@ -59,25 +61,26 @@ std::vector<Mesh_t> Vonk::read3DFile(
 
   static int constexpr toIgnore = aiPrimitiveType::aiPrimitiveType_POINT | aiPrimitiveType::aiPrimitiveType_LINE;
 
-  importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
-  importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, toIgnore);
-  importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, recalcComps);
+  // importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
+  // importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, toIgnore);
+  // importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, recalcComps);
 
-  if (recalc && (recalcComps & aiComponent_NORMALS)) {
-    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 175.f);
-  }
+  // if (recalc && (recalcComps & aiComponent_NORMALS)) {
+  //   importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 175.f);
+  // }
 
-  // ::: Prepare scene
+  // ::: Prepare scene  // @DANI Fails with .glb scenes...
   auto const scene = importer.ReadFile(filepath, 0);
   if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
     LogErrorf("[ASSIMP] - Scene {} : {}", filepath, importer.GetErrorString());
     return {};
   }
+  LogInfof("NNNNNNNNNNNN {}", scene->mNumMeshes);
+  return {};  // @DANI
 
   // ::: Get Meshes
   std::vector<Mesh_t> meshes;
   meshes.reserve(scene->mNumMeshes);
-  LogInfof("NNNNNNNNNNNN {}", scene->mNumMeshes);
   for (size_t i = 0; i < scene->mNumMeshes; ++i) {
     aiMesh const *mesh = scene->mMeshes[i];
     Assert(mesh);

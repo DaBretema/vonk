@@ -79,7 +79,7 @@ int main()
 
   // ::: Scene 3 (from assimp)
 
-  auto const                     dataScene3 = vonk.read3DFile("./assets/meshes/sphere.glb");
+  auto const                     dataScene3 = vonk.read3DFile("./assets/meshes/untitled.fbx");
   vonk::DrawPipelineData_t const pipelineCI3 {
     .useMeshes          = true,
     .pDrawShader        = &ds_vertexdata,
