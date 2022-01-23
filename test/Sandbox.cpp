@@ -44,7 +44,7 @@ int main()
 
   //-------------------------------------
 
-  // ::: Scene 1
+  // ::: Scene 1 (hardcode)
 
   vonk::DrawPipelineData_t const pipelineCI1 {
     .useMeshes          = false,
@@ -54,13 +54,14 @@ int main()
 
   //-------------------------------------
 
-  // ::: Scene 2
+  // ::: Scene 2 (one)
 
   float constexpr meshSize = 0.5f;
   auto const dataScene2    = vonk.createMesh(
     // Indices
     // { 0, 1, 2, 2, 3, 0 },  // CW
     { 0, 3, 2, 0, 2, 1 },  // CCW
+    // { 1, 2, 0, 2, 3, 0 },  // CW ¿?
     // Vertices
     {
       { .vertex = { -meshSize, meshSize, 0.0f }, .color = { 1, 0, 0 } },   // 0
@@ -77,13 +78,48 @@ int main()
 
   //-------------------------------------
 
-  // ::: Scene 3 (from assimp)
+  // ::: Scene 3 (many)
 
-  auto const                     dataScene3 = vonk.read3DFile("./assets/meshes/untitled.fbx");
+  std::vector<vonk::Mesh_t> dataScene3;
+  float constexpr ms2 = 0.25f;
+  float constexpr d2  = ms2 * 2.f;
+  dataScene3.push_back(vonk.createMesh(
+    // Indices
+    { 0, 3, 2, 0, 2, 1 },  // CCW
+    // Vertices
+    {
+      { .vertex = { -ms2 - d2, ms2, 0.0f }, .color = { 1, 0, 0 } },   // 0
+      { .vertex = { ms2 - d2, ms2, 0.0f }, .color = { 0, 1, 0 } },    // 1
+      { .vertex = { ms2 - d2, -ms2, 0.0f }, .color = { 0, 0, 1 } },   // 2
+      { .vertex = { -ms2 - d2, -ms2, 0.0f }, .color = { 1, 1, 1 } },  // 3
+    }));
+  dataScene3.push_back(vonk.createMesh(
+    // Indices
+    { 0, 3, 2, 0, 2, 1 },  // CCW
+    // Vertices
+    {
+      { .vertex = { -ms2 + d2, ms2, 0.0f }, .color = { 1, 0, 0 } },   // 0
+      { .vertex = { ms2 + d2, ms2, 0.0f }, .color = { 0, 1, 0 } },    // 1
+      { .vertex = { ms2 + d2, -ms2, 0.0f }, .color = { 0, 0, 1 } },   // 2
+      { .vertex = { -ms2 + d2, -ms2, 0.0f }, .color = { 1, 1, 1 } },  // 3
+    }));
+
   vonk::DrawPipelineData_t const pipelineCI3 {
     .useMeshes          = true,
     .pDrawShader        = &ds_vertexdata,
     .commandBuffersData = { { .commands = [&](VkCommandBuffer cb) { vonk.drawMeshes(cb, dataScene3); } } },
+  };
+
+  //-------------------------------------
+
+  // ::: Scene 4 (from assimp)
+
+  auto const dataScene4 = vonk.read3DFile("./assets/meshes/two_quads.fbx");
+
+  vonk::DrawPipelineData_t const pipelineCI4 {
+    .useMeshes          = true,
+    .pDrawShader        = &ds_vertexdata,
+    .commandBuffersData = { { .commands = [&](VkCommandBuffer cb) { vonk.drawMeshes(cb, dataScene4); } } },
   };
 
   //-------------------------------------
@@ -93,6 +129,7 @@ int main()
   vonk.addPipeline(pipelineCI1);
   vonk.addPipeline(pipelineCI2);
   if (!dataScene3.empty()) vonk.addPipeline(pipelineCI3);
+  if (!dataScene4.empty()) vonk.addPipeline(pipelineCI4);
 
   //-------------------------------------
 

@@ -50,7 +50,7 @@ std::vector<Mesh_t> Vonk::read3DFile(
                                             | ((recalculateTangentsAndBitangets) ? aiProcess_CalcTangentSpace : 0)
                                         : 0;
 
-  uint32_t const flags = aiProcess_ConvertToLeftHanded | aiProcess_GenBoundingBoxes | recalcFlags | (
+  uint32_t const flags =  aiProcess_ConvertToLeftHanded | aiProcess_GenBoundingBoxes | recalcFlags | (
                            optimizationLevel==1 ? aiProcessPreset_TargetRealtime_Fast       :
                            optimizationLevel==2 ? aiProcessPreset_TargetRealtime_Quality    :
                            optimizationLevel==3 ? aiProcessPreset_TargetRealtime_MaxQuality : 0
@@ -61,31 +61,38 @@ std::vector<Mesh_t> Vonk::read3DFile(
 
   static int constexpr toIgnore = aiPrimitiveType::aiPrimitiveType_POINT | aiPrimitiveType::aiPrimitiveType_LINE;
 
-  // importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
-  // importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, toIgnore);
-  // importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, recalcComps);
+  importer.SetPropertyBool(AI_CONFIG_FAVOUR_SPEED, 1);
+  importer.SetPropertyInteger(AI_CONFIG_PP_SBP_REMOVE, toIgnore);
+  importer.SetPropertyInteger(AI_CONFIG_PP_RVC_FLAGS, recalcComps);
 
-  // if (recalc && (recalcComps & aiComponent_NORMALS)) {
-  //   importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 175.f);
-  // }
+  if (recalc && (recalcComps & aiComponent_NORMALS)) {
+    importer.SetPropertyFloat(AI_CONFIG_PP_GSN_MAX_SMOOTHING_ANGLE, 175.f);
+  }
 
   // ::: Prepare scene  // @DANI Fails with .glb scenes...
-  auto const scene = importer.ReadFile(filepath, 0);
+  auto const scene = importer.ReadFile(filepath, aiProcess_Triangulate /*flags*/);
   if (!scene || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !scene->mRootNode) {
     LogErrorf("[ASSIMP] - Scene {} : {}", filepath, importer.GetErrorString());
     return {};
   }
   LogInfof("NNNNNNNNNNNN {}", scene->mNumMeshes);
-  return {};  // @DANI
+  // return {};  // @DANI
 
   // ::: Get Meshes
   std::vector<Mesh_t> meshes;
   meshes.reserve(scene->mNumMeshes);
-  for (size_t i = 0; i < scene->mNumMeshes; ++i) {
-    aiMesh const *mesh = scene->mMeshes[i];
+  for (size_t meshIdx = 0; meshIdx < scene->mNumMeshes; ++meshIdx) {
+    aiMesh const *mesh = scene->mMeshes[meshIdx];
     Assert(mesh);
 
-    LogInfof("AAAAAAAAAAAAAAAAAAA {}", mesh->mName.C_Str());
+    auto const &v = mesh->mVertices;
+    auto const &u = mesh->mTextureCoords[0];
+    auto const &n = mesh->mNormals;
+    auto const &t = mesh->mTangents;
+    auto const &b = mesh->mBitangents;
+    auto const &c = mesh->mColors[0];
+
+    LogInfof("AAAAAAAAAAAAA {}", mesh->mName.C_Str());
 
     // SXMesh_Info mde;
     // mde.idx     = i;
@@ -94,32 +101,35 @@ std::vector<Mesh_t> Vonk::read3DFile(
 
     std::vector<uint32_t> indices;
     indices.reserve(mesh->mNumFaces * 3u);
-    if (mesh->mFaces[i].mNumIndices == 3)
-      for (size_t i = 0; i < mesh->mNumFaces; ++i)
+    for (size_t i = 0; i < mesh->mNumFaces; ++i)
+      if (mesh->mFaces[i].mNumIndices == 3)
         for (auto j : { 0, 1, 2 }) indices.push_back(mesh->mFaces[i].mIndices[j]);
 
     std::vector<Vertex_t> vertices;
     vertices.reserve(mesh->mNumVertices);
     for (size_t i = 0; i < mesh->mNumVertices; ++i) {
-      auto const &v = mesh->mVertices;
-      auto const &u = mesh->mTextureCoords[0];
-      auto const &n = mesh->mNormals;
-      auto const &t = mesh->mTangents;
-      auto const &b = mesh->mBitangents;
-      auto const &c = mesh->mColors[0];
-
       Vertex_t out;
-      if (v) out.vertex = { v->x, v->y, v->z };
-      if (u) out.uv = { u->x, u->y };
-      if (n) out.normal = { n->x, n->y, n->z };
-      if (t) out.tangent = { t->x, t->y, t->z };
-      if (b) out.bitangent = { b->x, b->y, b->z };
-      if (c) out.color = { c->r, c->g, c->b };
+      if (v) out.vertex = { v[i].x, v[i].y, v[i].z };
+      if (u) out.uv = { u[i].x, u[i].y };
+      if (n) out.normal = { n[i].x, n[i].y, n[i].z };
+      if (t) out.tangent = { t[i].x, t[i].y, t[i].z };
+      if (b) out.bitangent = { b[i].x, b[i].y, b[i].z };
+      if (c) out.color = { c[i].r, c[i].g, c[i].b };
+      vertices.push_back(out);
     }
 
-    meshes.push_back(vonk::createMesh(mDevice, indices, vertices));
+    LogInfof(
+      "AAAAAAAAAAAAA 2 : {} / {} : {} / {}",
+      mesh->mNumFaces * 3,
+      mesh->mNumVertices,
+      indices.size(),
+      vertices.size());
+    // return {};
+    meshes.push_back(createMesh(indices, vertices));
   }
 
+  // LogInfof("AAAAAAAAAAAAA 2 {}", meshes.size());
+  // LogInfof("AAAAAAAAAAAAA 3 {}", meshes.size()>0 ? meshes.at(1).);
   return meshes;
 }
 
