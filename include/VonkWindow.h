@@ -2,8 +2,10 @@
 
 #include "_vulkan.h"
 
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
+#ifndef DC_ENABLED_HEADLESS
+#  include <GLFW/glfw3.h>
+#  include <GLFW/glfw3native.h>
+#endif
 
 #include <string>
 #include <functional>

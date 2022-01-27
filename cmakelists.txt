@@ -1,23 +1,166 @@
-# ------------------------------------------------------------------------- #
-# GLOBAL SETTINGS
-# ------------------------------------------------------------------------- #
+###############################################################################
+
+# ---------------------------------------------- #
+# - GLOBAL SETTINGS
+# ---------------------------------------------- #
 
 cmake_minimum_required(VERSION 3.0)
-set(CMAKE_MESSAGE_LOG_LEVEL "WARNING")
-
 project(Vonk)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # Makefile and Ninja only
+set(CMAKE_MESSAGE_LOG_LEVEL "WARNING")  # Comment this to see STATUS messages
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+###############################################################################
+
+# ---------------------------------------------- #
+# - FLAGS
+# ---------------------------------------------- #
 
 set(CMAKE_CXX_FLAGS "")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -Wall -Wpedantic -Wextra -Wrange-loop-construct")
 
+###############################################################################
 
-# ------------------------------------------------------------------------- #
-# GLOBAL FUNCTIONS
-# ------------------------------------------------------------------------- #
+# ---------------------------------------------- #
+# - MAIN PATHS
+# ---------------------------------------------- #
 
+set(SRC    ${CMAKE_CURRENT_SOURCE_DIR}/src    )
+set(INCL   ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(VENDOR ${CMAKE_CURRENT_SOURCE_DIR}/vendor )
+
+###############################################################################
+
+# ---------------------------------------------- #
+# - CONFIG/OPTIONS
+# ---------------------------------------------- #
+
+option( OPT_UNIT_TESTS  "Compile unit tests instead of main app" OFF  ) # WIP : Let it OFF
+
+option( OPT_VULKAN   "Enable Vulkan and precompile shaders" ON  ) # WIP : Let it ON
+option( OPT_ASSIMP   "Enable and Build Assimp"              OFF )
+option( OPT_HEADLESS "The app will run without window/gui"  OFF ) # WIP : Let it OFF
+
+###############################################################################
+
+# ---------------------------------------------- #
+# - THIRD PARTY : VULKAN
+# ---------------------------------------------- #
+
+if (OPT_VULKAN)
+    # ::: Get the package
+    find_package(Vulkan REQUIRED COMPONENTS glslc)  # 'glslc' for shader pre-compilation
+
+    # ::: Shaders precompilation
+    # . Get compiler program
+    find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
+    # . Vars
+    set(shaders_src_dir "${CMAKE_SOURCE_DIR}/assets/shaders")
+    set(shaders_bin_dir "${CMAKE_BINARY_DIR}/assets/shaders")
+    # . Get shader-files list
+    file(GLOB shaders_list ${shaders_src_dir}/*)
+    # . Create directory on build folder
+    add_custom_command( COMMAND
+    ${CMAKE_COMMAND} -E remove_directory ${shaders_bin_dir}
+    ${CMAKE_COMMAND} -E make_directory ${shaders_bin_dir}
+    OUTPUT ${shaders_bin_dir}
+    )
+    # . Compile and place the output on previous step folder
+    foreach(shader_src IN LISTS shaders_list)
+    get_filename_component(filename_and_ext ${shader_src} NAME)
+    set(shader_dst ${shaders_bin_dir}/${filename_and_ext}.spv)
+    add_custom_command(COMMAND ${glslc_executable} -o ${shader_dst} ${shader_src} OUTPUT ${shader_dst})
+    list(APPEND VK_SPV_SHADERS ${shaders_bin_dir}/${filename_and_ext}.spv)
+    endforeach()
+    # # add_custom_target(shaders ALL DEPENDS ${VK_SPV_SHADERS}) # Seems like unneeded
+
+    # ::: Add to the project
+    list(APPEND VENDOR_INCL ${Vulkan_INCLUDE_DIRS})
+    list(APPEND VENDOR_LIBS ${Vulkan_LIBRARIES})
+    add_compile_definitions(DC_ENABLED_VULKAN)
+endif()
+
+# ---------------------------------------------- #
+# - THIRD PARTY : ASSIMP
+# ---------------------------------------------- #
+
+if (OPT_ASSIMP)
+    # ::: Compile as : Static
+    set (ASSIMP_BUILD_SHARED_LIBS OFF BOOL)
+
+    # ::: Disable extras
+    set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+    set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+
+    # ::: Disable importers/exporters
+    set (ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
+    set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+
+    # ::: Enable selected importers
+    set (ASSIMP_BUILD_GLFT_IMPORTER ON BOOL)
+    set (ASSIMP_BUILD_FBX_IMPORTER ON BOOL)
+    set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
+
+    # ::: Disable docs
+    set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+
+    # ::: Add to the project
+    add_subdirectory(${VENDOR}/assimp)
+    list(APPEND VENDOR_LIBS assimp)
+    add_compile_definitions(DC_ENABLED_ASSIMP)
+endif()
+
+# ---------------------------------------------- #
+# - THIRD PARTY : WINDOW
+# ---------------------------------------------- #
+
+if (OPT_HEADLESS)
+  add_compile_definitions(DC_ENABLED_HEADLESS)
+else()  # Use GLFW for the Window
+    # ::: Disable docs
+    set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+    # ::: Add to the project
+    add_subdirectory(${VENDOR}/glfw)
+    list(APPEND VENDOR_LIBS glfw)
+endif()
+
+# ---------------------------------------------- #
+# - THIRD PARTY : BASICS
+# ---------------------------------------------- #
+
+# Modern Printf
+set (FMT_DOC "")
+add_subdirectory(${VENDOR}/fmt)
+list(APPEND VENDOR_LIBS fmt)
+
+# Glsl-Style Maths
+add_subdirectory(${VENDOR}/glm)
+list(APPEND VENDOR_LIBS glm)
+
+###############################################################################
+
+# ---------------------------------------------- #
+# - PROJECT
+# ---------------------------------------------- #
+
+file(GLOB SRC_FILES  ${SRC}/*.cpp)
+file(GLOB INCL_FILES ${INCL}/*.h )
+
+add_library(${PROJECT_NAME} STATIC ${VK_SPV_SHADERS} ${SRC_FILES} ${INCL_FILES})
+
+target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20 ) # -> PRIVATE (??)
+target_include_directories ( ${PROJECT_NAME} PUBLIC ${INCL} ${VENDOR} ${VENDOR_INCL}) # -> PRIVATE (??)
+target_link_libraries      ( ${PROJECT_NAME} PUBLIC ${VENDOR_LIBS}                  ) # -> PRIVATE (??)
+
+###############################################################################
+
+# ---------------------------------------------- #
+# - HELPERS ( Define after main target )
+# ---------------------------------------------- #
+
+# ::: Copy dir content into other dir
 function(COPY_FROM_TO_DIR src_dir dst_dir)
     file(GLOB src_files ${src_dir}/*)
     foreach(src_file IN LISTS src_files)
@@ -27,102 +170,38 @@ function(COPY_FROM_TO_DIR src_dir dst_dir)
     endforeach()
 endfunction()
 
-function(ADD_EXE_TEST test_name)
-    add_executable(${test_name} test/${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE ${project_libs} ${PROJECT_NAME})
+# ::: Output some code as Exe
+function(ADD_EXE exe_name)
+    add_executable(${exe_name} test/${exe_name}.cpp)
+    target_link_libraries(${exe_name} PRIVATE ${PROJECT_NAME})  # Adding ${PROJECT_NAME} this Exe will use our Lib
+endfunction()
+
+# ::: Add a test ( Use with Catch2 or GoogleTest )
+function(ADD_TEST test_name)
+    ADD_EXE(${test_name})
     add_test(COMMAND ${test_name})
 endfunction()
 
+###############################################################################
 
-# ------------------------------------------------------------------------- #
-# THIRD PARTY
-# ------------------------------------------------------------------------- #
-
-# DOCS
-set (FMT_DOC "")
-set (GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-
-# VULKAN
-find_package(Vulkan REQUIRED COMPONENTS glslc)  # 'glslc' for shader pre-compilation
-find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
-
-# ASSIMP
-## Static
-set (ASSIMP_BUILD_SHARED_LIBS OFF BOOL)
-## Disable extras
-set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-## Disable importers/exporters
-set (ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
-set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
-# ## Enable selected importers
-# set (ASSIMP_BUILD_GLFT_IMPORTER ON BOOL)
-set (ASSIMP_BUILD_FBX_IMPORTER ON BOOL)
-# set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
-
-# ADD FOLDERS
-add_subdirectory(vendor/fmt)
-add_subdirectory(vendor/glm)
-add_subdirectory(vendor/glfw)
-add_subdirectory(vendor/assimp)
-
-set(project_libs_incl ${Vulkan_INCLUDE_DIRS})
-set(project_libs fmt glm glfw assimp ${Vulkan_LIBRARIES})
-
-
-# ------------------------------------------------------------------------- #
-# SHADERS COMPILATION AND COPY
-# ------------------------------------------------------------------------- #
-
-set(shaders_src_dir "${CMAKE_SOURCE_DIR}/assets/shaders")
-set(shaders_bin_dir "${CMAKE_BINARY_DIR}/assets/shaders")
-
-file(GLOB shaders_list ${shaders_src_dir}/*)
-
-add_custom_command( COMMAND
-    ${CMAKE_COMMAND} -E remove_directory ${shaders_bin_dir}
-    ${CMAKE_COMMAND} -E make_directory ${shaders_bin_dir}
-  OUTPUT ${shaders_bin_dir}
-)
-
-foreach(shader_src IN LISTS shaders_list)
-  get_filename_component(filename_and_ext ${shader_src} NAME)
-  set(shader_dst ${shaders_bin_dir}/${filename_and_ext}.spv)
-  add_custom_command(COMMAND ${glslc_executable} -o ${shader_dst} ${shader_src} OUTPUT ${shader_dst})
-  list(APPEND shaders_spv_list ${shaders_bin_dir}/${filename_and_ext}.spv)
-endforeach()
-
-# # add_custom_target(shaders ALL DEPENDS ${shaders_spv_list}) # Seems like unneeded
-
-
-# ------------------------------------------------------------------------- #
-# PROJECT
-# ------------------------------------------------------------------------- #
-
-file(GLOB SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
-file(GLOB HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
-
-add_library(${PROJECT_NAME} STATIC ${shaders_spv_list} ${SOURCE_FILES} ${HEADER_FILES})
-
-target_compile_features    ( ${PROJECT_NAME} PUBLIC cxx_std_20 ) # -> PRIVATE (??)
-target_include_directories ( ${PROJECT_NAME} PUBLIC "./include" "./vendor" ${project_libs_incl}) # -> PRIVATE (??)
-target_link_libraries      ( ${PROJECT_NAME} PUBLIC ${project_libs}                           ) # -> PRIVATE (??)
-
-
-# ------------------------------------------------------------------------- #
-# COPY MESHES ASSETS
-# ------------------------------------------------------------------------- #
+# ---------------------------------------------- #
+# - COPY MESHES ASSETS
+# ---------------------------------------------- #
 
 set(meshes_src_dir "${CMAKE_SOURCE_DIR}/assets/meshes")
 set(meshes_bin_dir "${CMAKE_BINARY_DIR}/assets/meshes")
 
 COPY_FROM_TO_DIR(${meshes_src_dir} ${meshes_bin_dir})
 
+###############################################################################
 
-# ------------------------------------------------------------------------- #
-# EXE and TESTING
-# ------------------------------------------------------------------------- #
+# ---------------------------------------------- #
+# - EXE / TESTs
+# ---------------------------------------------- #
 
-ADD_EXE_TEST(Sandbox)
+if (OPT_UNIT_TESTS)
+else()
+    ADD_EXE(Sandbox)
+endif()
+
+###############################################################################

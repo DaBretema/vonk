@@ -3,10 +3,12 @@
 #include "VonkTools.h"
 #include "VonkWindow.h"
 
-#include <assimp/Importer.hpp>
-#include <assimp/postprocess.h>
-#include <assimp/scene.h>
-#include <assimp/config.h.in>
+#ifdef DC_ENABLED_ASSIMP
+#  include <assimp/Importer.hpp>
+#  include <assimp/postprocess.h>
+#  include <assimp/scene.h>
+#  include <assimp/config.h.in>
+#endif
 
 #include <filesystem>
 
@@ -20,12 +22,13 @@ namespace vonk
 //-------------------------------------
 
 std::vector<Mesh_t> Vonk::read3DFile(
-  std::string const &filepath,
-  uint32_t           optimizationLevel,
-  bool               recalculateUVs,
-  bool               recalculateNormals,
-  bool               recalculateTangentsAndBitangets)
+  MBU std::string const &filepath,
+  MBU uint32_t           optimizationLevel,
+  MBU bool               recalculateUVs,
+  MBU bool               recalculateNormals,
+  MBU bool               recalculateTangentsAndBitangets)
 {
+#if DC_ENABLED_ASSIMP
   static Assimp::Importer importer = {};  // Expensive to initialize so create only once
 
   auto const fp = std::filesystem::absolute(filepath);
@@ -131,6 +134,9 @@ std::vector<Mesh_t> Vonk::read3DFile(
   // LogInfof("AAAAAAAAAAAAA 2 {}", meshes.size());
   // LogInfof("AAAAAAAAAAAAA 3 {}", meshes.size()>0 ? meshes.at(1).);
   return meshes;
+#else
+  return {};
+#endif
 }
 
 //-------------------------------------
