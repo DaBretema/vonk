@@ -5,12 +5,69 @@
 #include "Macros.h"
 
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
+
+#include <sole.hpp>
+
+using uuid_t = std::string;
 
 namespace ddd
 {  //
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // CPP TOOLING
+//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+class HierarchyTree
+{
+public:
+  struct Node
+  {
+    enum class Type
+    {
+      Node,
+      Mesh,
+      Light,
+      Camera
+    };
+
+    Type type = Type::Node;
+
+    std::string name  = "";
+    uuid_t      uuid  = "";
+    uint32_t    level = 0;
+    glm::mat4   transform { 1.f };
+
+    // std::vector<uint32_t> meshesIdx {};  // Avoid this injecting everything as Node and filtering by Type
+
+    uuid_t              parent = "";
+    std::vector<uuid_t> childs = {};
+  };
+
+  inline uuid_t addNode(Node::Type type, std::string const &name, glm::mat4 const &T, uuid_t const &parent)
+  {
+    Node *p = (mHierarchy.count(parent) > 0) ? &mHierarchy.at(parent) : nullptr;
+
+    uuid_t const   uuid  = sole::uuid4().str();
+    uint32_t const level = p ? p->level + 1 : 0;
+
+    Node const node {
+      .type      = type,
+      .name      = name,
+      .uuid      = uuid,
+      .level     = level,
+      .transform = T,
+      .parent    = parent,
+    };
+
+    if (p) { p->childs.push_back(uuid); }
+
+    mHierarchy.insert_or_assign(uuid, node);
+  }
+
+private:
+  std::unordered_map<uuid_t, Node> mHierarchy = {};
+};
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 std::string floatStr(float f, uint32_t decs = 2)
 {
@@ -27,7 +84,7 @@ std::string floatStr(float f, uint32_t decs = 2)
   }
   return s;
 };
-std::string vecStr(auto const &v, uint32_t decs = 2)
+std::string vecStr(glm::vec3 const &v, uint32_t decs = 2)
 {
   std::string s = "{ ";
   for (size_t i = 0; i < v.length() - 1; ++i) { s += " " + floatStr(v[i], decs) + ","; }
@@ -68,15 +125,15 @@ MBU glm::vec4 constexpr Magenta { One, Zero, One, One };
 MBU glm::vec4 constexpr Yellow { One, One, Zero, One };
 
 // . CONST : Colors Mix
-MBU glm::vec4 constexpr Gray01 { 0.1f, 0.1f, 0.1f, One };
-MBU glm::vec4 constexpr Gray02 { 0.2f, 0.2f, 0.2f, One };
-MBU glm::vec4 constexpr Gray03 { 0.3f, 0.3f, 0.3f, One };
-MBU glm::vec4 constexpr Gray04 { 0.4f, 0.4f, 0.4f, One };
-MBU glm::vec4 constexpr Gray05 { 0.5f, 0.5f, 0.5f, One };
-MBU glm::vec4 constexpr Gray06 { 0.6f, 0.6f, 0.6f, One };
-MBU glm::vec4 constexpr Gray07 { 0.7f, 0.7f, 0.7f, One };
-MBU glm::vec4 constexpr Gray08 { 0.8f, 0.8f, 0.8f, One };
-MBU glm::vec4 constexpr Gray09 { 0.9f, 0.9f, 0.9f, One };
+MBU glm::vec4 constexpr Gray01 = { 0.1f, 0.1f, 0.1f, One };
+MBU glm::vec4 constexpr Gray02 = { 0.2f, 0.2f, 0.2f, One };
+MBU glm::vec4 constexpr Gray03 = { 0.3f, 0.3f, 0.3f, One };
+MBU glm::vec4 constexpr Gray04 = { 0.4f, 0.4f, 0.4f, One };
+MBU glm::vec4 constexpr Gray05 = { 0.5f, 0.5f, 0.5f, One };
+MBU glm::vec4 constexpr Gray06 = { 0.6f, 0.6f, 0.6f, One };
+MBU glm::vec4 constexpr Gray07 = { 0.7f, 0.7f, 0.7f, One };
+MBU glm::vec4 constexpr Gray08 = { 0.8f, 0.8f, 0.8f, One };
+MBU glm::vec4 constexpr Gray09 = { 0.9f, 0.9f, 0.9f, One };
 
 //=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 // GLM TOOLING
@@ -109,23 +166,23 @@ struct Mesh
 {
   struct Vertex
   {
-    glm::vec3 pos { Zero3 };
-    glm::vec2 uv { Zero2 };
-    glm::vec3 normal { Zero3 };
-    glm::vec3 tangent { Zero3 };
-    glm::vec3 bitangent { Zero3 };
-    glm::vec4 color { Zero4x };
+    glm::vec3 pos       = Zero3;
+    glm::vec2 uv        = Zero2;
+    glm::vec3 normal    = Zero3;
+    glm::vec3 tangent   = Zero3;
+    glm::vec3 bitangent = Zero3;
+    glm::vec4 color     = Zero4x;
   };
 
   struct Instance
   {
     glm::mat4 transform { 1.f };
-    glm::vec4 color { Magenta };
+    glm::vec4 color = Magenta;
   };
 
-  std::vector<uint32_t> indices {};
-  std::vector<Vertex>   vertices {};
-  std::vector<Instance> instances {};
+  std::vector<uint32_t> indices   = {};
+  std::vector<Vertex>   vertices  = {};
+  std::vector<Instance> instances = {};
 };
 
 //----
@@ -142,11 +199,11 @@ struct Camera
     Perspective,
     Orthogonal
   };
-  glm::vec3 eye { AxisZ * -10.f };       // Points  // or... glm::vec3 pos { AxisZ * -10.f }; (Point)
-  glm::vec3 lookat { Zero3 };            // Points  // or... glm::vec3 rot { Zero3 }; (Euler Angles)
-  float     fov { glm::radians(45.f) };  // [0.5 to 170] Degrees (From Blender)
-  Mode      mode { Mode::Orbital };
-  Type      type { Type::Perspective };
+  glm::vec3 eye    = AxisZ * -10.f;       // Points  // or... glm::vec3 pos { AxisZ * -10.f }; (Point)
+  glm::vec3 lookat = Zero3;               // Points  // or... glm::vec3 rot { Zero3 }; (Euler Angles)
+  float     fov    = glm::radians(45.f);  // [0.5 to 170] Degrees (From Blender)
+  Mode      mode   = Mode::Orbital;
+  Type      type   = Type::Perspective;
   // . And use pos*rot to Fly and rot*pos to Orbit
 };
 
@@ -163,9 +220,9 @@ struct Light  // To direct use on UBOs : Keep it aligned
     Dir
   };
 
-  glm::vec4 pos { AxisY * 5.f, 1.f };  // .w==0 means disabled
-  glm::vec4 color { Yellow };
-  glm::vec4 dir { Zero4 };  // (Eurler Angles) Apply to (0,-1,0)
+  glm::vec4 pos   = { AxisY * 5.f, 1.f };  // .w==0 means disabled
+  glm::vec4 color = Yellow;
+  glm::vec4 dir   = Zero4;  // (Eurler Angles) Apply to (0,-1,0)
 
   float type     = (float)Point;
   float intesity = 1.f;   // [ 0.0 : 100'000 ] on Watts
@@ -188,8 +245,8 @@ struct Material
 {
   struct
   {
-    glm::vec4 albedo { Magenta };
-    glm::vec4 emissive { Black };
+    glm::vec4 albedo   = Magenta;
+    glm::vec4 emissive = Black;
   } color;
 
   struct
@@ -214,10 +271,10 @@ struct Material
 struct Scene
 {
   // Hierarchy ...
-  std::vector<Material> materials;
-  std::vector<Camera>   cameras;
-  std::vector<Light>    lights;
-  std::vector<Mesh>     meshes;
+  std::vector<Material> materials = {};
+  std::vector<Camera>   cameras   = {};
+  std::vector<Light>    lights    = {};
+  std::vector<Mesh>     meshes    = {};
 };
 
 //----
