@@ -39,7 +39,6 @@ set(VENDOR ${CMAKE_CURRENT_SOURCE_DIR}/vendor )
 option( OPT_UNIT_TESTS  "Compile unit tests instead of main app" OFF  ) # WIP : Let it OFF
 
 option( OPT_VULKAN   "Enable Vulkan and precompile shaders" ON  ) # WIP : Let it ON
-option( OPT_ASSIMP   "Enable and Build Assimp"              OFF )
 option( OPT_HEADLESS "The app will run without window/gui"  OFF ) # WIP : Let it OFF
 
 ###############################################################################
@@ -79,37 +78,6 @@ if (OPT_VULKAN)
     list(APPEND VENDOR_INCL ${Vulkan_INCLUDE_DIRS})
     list(APPEND VENDOR_LIBS ${Vulkan_LIBRARIES})
     add_compile_definitions(DC_ENABLED_VULKAN)
-endif()
-
-# ---------------------------------------------- #
-# - THIRD PARTY : ASSIMP
-# ---------------------------------------------- #
-
-if (OPT_ASSIMP)
-    # ::: Compile as : Static
-    set (ASSIMP_BUILD_SHARED_LIBS OFF BOOL)
-
-    # ::: Disable extras
-    set (ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-    set (ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set (ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-
-    # ::: Disable importers/exporters
-    set (ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
-    set (ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
-
-    # ::: Enable selected importers
-    set (ASSIMP_BUILD_GLFT_IMPORTER ON BOOL)
-    set (ASSIMP_BUILD_FBX_IMPORTER ON BOOL)
-    set (ASSIMP_BUILD_OBJ_IMPORTER ON BOOL)
-
-    # ::: Disable docs
-    set (ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-
-    # ::: Add to the project
-    add_subdirectory(${VENDOR}/assimp)
-    list(APPEND VENDOR_LIBS assimp)
-    add_compile_definitions(DC_ENABLED_ASSIMP)
 endif()
 
 # ---------------------------------------------- #
