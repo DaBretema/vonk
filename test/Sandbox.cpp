@@ -1,129 +1,109 @@
-// #include "VonkWindow.h"
-// #include "Vonk.h"
+#include "Vonk.h"
+#include "VonkWindow.h"
 
 #include "Macros.h"
 #include "_glm.h"
 
+#include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
-#include <sole.hpp>
-
-#include <string>
+#include <sole.hpp> // UUID thing
 
 namespace dc
 { //
 
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// CPP TOOLING
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// class HierarchyTree
-// {
-// public:
-//   struct Node
-//   {
-//     enum class Type
-//     {
-//       Node,
-//       Mesh,
-//       Light,
-//       Camera
-//     };  // Add extra data-structs to allow O(1) search/iteration by Type.
+//=====================================
+// RENDER CPU SIDE - CONSTANTS
+//=====================================
 
-//     Type type = Type::Node;
+// . Factors / Steps
+MBU float constexpr toRadians = 3.14159f / 180.f;
+MBU float constexpr toDegrees = 180.f / 3.14159f;
 
-//     std::string name  = "";
-//     uuid_t      uuid  = "";
-//     uint32_t    level = 0;
-//     glm::mat4   transform { 1.f };
+// . Vecs
+MBU float constexpr One      = 1.f;
+MBU glm::vec2 constexpr One2 = {One, One};
+MBU glm::vec3 constexpr One3 = {One, One, One};
+MBU glm::vec4 constexpr One4 = {One, One, One, One};
 
-//     // std::vector<uint32_t> meshesIdx {};  // Avoid this injecting everything as Node and filtering by Type
+MBU float constexpr Zero       = 0.f;
+MBU glm::vec2 constexpr Zero2  = {Zero, Zero};
+MBU glm::vec3 constexpr Zero3  = {Zero, Zero, Zero};
+MBU glm::vec4 constexpr Zero4  = {Zero, Zero, Zero, Zero};
+MBU glm::vec4 constexpr Zero4x = {Zero, Zero, Zero, One};
 
-//     uuid_t              parent = "";
-//     std::vector<uuid_t> childs = {};
-//   };
+MBU glm::vec3 constexpr AxisX = {One, Zero, Zero};
+MBU glm::vec3 constexpr AxisY = {Zero, One, Zero};
+MBU glm::vec3 constexpr AxisZ = {Zero, Zero, One};
 
-//   inline uuid_t addNode(Node::Type type, std::string const &name, glm::mat4 const &T, uuid_t const &parent)
-//   {
-//     Node *p = (mHierarchy.count(parent) > 0) ? &mHierarchy.at(parent) : nullptr;
+// . Colors Primary
+MBU glm::vec4 constexpr White   = {One4};
+MBU glm::vec4 constexpr Black   = {Zero4x};
+MBU glm::vec4 constexpr Red     = {One, Zero, Zero, One};
+MBU glm::vec4 constexpr Green   = {Zero, One, Zero, One};
+MBU glm::vec4 constexpr Blue    = {Zero, Zero, One, One};
+MBU glm::vec4 constexpr Cyan    = {Zero, One, One, One};
+MBU glm::vec4 constexpr Magenta = {One, Zero, One, One};
+MBU glm::vec4 constexpr Yellow  = {One, One, Zero, One};
 
-//     uuid_t const   uuid  = sole::uuid4().str();
-//     uint32_t const level = p ? p->level + 1 : 0;
+// . Colors Mix
+MBU glm::vec4 constexpr Gray01 = {0.1f, 0.1f, 0.1f, One};
+MBU glm::vec4 constexpr Gray02 = {0.2f, 0.2f, 0.2f, One};
+MBU glm::vec4 constexpr Gray03 = {0.3f, 0.3f, 0.3f, One};
+MBU glm::vec4 constexpr Gray04 = {0.4f, 0.4f, 0.4f, One};
+MBU glm::vec4 constexpr Gray05 = {0.5f, 0.5f, 0.5f, One};
+MBU glm::vec4 constexpr Gray06 = {0.6f, 0.6f, 0.6f, One};
+MBU glm::vec4 constexpr Gray07 = {0.7f, 0.7f, 0.7f, One};
+MBU glm::vec4 constexpr Gray08 = {0.8f, 0.8f, 0.8f, One};
+MBU glm::vec4 constexpr Gray09 = {0.9f, 0.9f, 0.9f, One};
 
-//     Node const node {
-//       .type      = type,
-//       .name      = name,
-//       .uuid      = uuid,
-//       .level     = level,
-//       .transform = T,
-//       .parent    = parent,
-//     };
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
 
-//     if (p) { p->childs.push_back(uuid); }
+//=====================================
+// CPP - TOOLING
+//=====================================
 
-//     mHierarchy.insert_or_assign(uuid, node);
-//   }
+// ::: STRINGS
 
-// private:
-//   std::unordered_map<uuid_t, Node> mHierarchy = {};
-// };
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+//---
+
 inline std::string toStr(float f, uint32_t d = 2)
 {
     return fmt::format("{:.{}f}", f, d);
 };
+
+//---
+
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+
+//=====================================
+// GLM - TOOLING
+//=====================================
+
+// ::: STRINGS
+
+//---
+
 inline std::string toStr(glm::vec3 const &v, uint32_t d = 2)
 {
     return fmt::format("({},{},{})", toStr(v.x, d), toStr(v.y, d), toStr(v.z, d));
 };
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-// . CONST : Factors / Steps
-MBU float constexpr toRadians{3.14159f / 180.f};
-MBU float constexpr toDegrees{180.f / 3.14159f};
+//---
 
-// . CONST : Vecs
-MBU float constexpr One{1.f};
-MBU glm::vec2 constexpr One2{One, One};
-MBU glm::vec3 constexpr One3{One, One, One};
-MBU glm::vec4 constexpr One4{One, One, One, One};
+// ::: ROTATIONS
 
-MBU float constexpr Zero{0.f};
-MBU       glm::vec2 constexpr Zero2{Zero, Zero};
-MBU       glm::vec3 constexpr Zero3{Zero, Zero, Zero};
-MBU       glm::vec4 constexpr Zero4{Zero, Zero, Zero, Zero};
-MBU       glm::vec4 constexpr Zero4x{Zero, Zero, Zero, One};
+//---
 
-MBU       glm::vec3 constexpr AxisX{One, Zero, Zero};
-MBU       glm::vec3 constexpr AxisY{Zero, One, Zero};
-MBU       glm::vec3 constexpr AxisZ{Zero, Zero, One};
-
-// . CONST : Colors Primary
-MBU       glm::vec4 constexpr White{One4};
-MBU       glm::vec4 constexpr Black{Zero4x};
-MBU       glm::vec4 constexpr Red{One, Zero, Zero, One};
-MBU       glm::vec4 constexpr Green{Zero, One, Zero, One};
-MBU       glm::vec4 constexpr Blue{Zero, Zero, One, One};
-MBU       glm::vec4 constexpr Cyan{Zero, One, One, One};
-MBU       glm::vec4 constexpr Magenta{One, Zero, One, One};
-MBU       glm::vec4 constexpr Yellow{One, One, Zero, One};
-
-// . CONST : Colors Mix
-MBU       glm::vec4 constexpr Gray01 = {0.1f, 0.1f, 0.1f, One};
-MBU       glm::vec4 constexpr Gray02 = {0.2f, 0.2f, 0.2f, One};
-MBU       glm::vec4 constexpr Gray03 = {0.3f, 0.3f, 0.3f, One};
-MBU       glm::vec4 constexpr Gray04 = {0.4f, 0.4f, 0.4f, One};
-MBU       glm::vec4 constexpr Gray05 = {0.5f, 0.5f, 0.5f, One};
-MBU       glm::vec4 constexpr Gray06 = {0.6f, 0.6f, 0.6f, One};
-MBU       glm::vec4 constexpr Gray07 = {0.7f, 0.7f, 0.7f, One};
-MBU       glm::vec4 constexpr Gray08 = {0.8f, 0.8f, 0.8f, One};
-MBU       glm::vec4 constexpr Gray09 = {0.9f, 0.9f, 0.9f, One};
-
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-// GLM TOOLING
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 glm::mat4 rotateXYZ(glm::mat4 &mat, glm::vec3 const &angles)
 {
     mat = glm::rotate(mat, glm::radians(angles.z), AxisZ);
@@ -132,11 +112,15 @@ glm::mat4 rotateXYZ(glm::mat4 &mat, glm::vec3 const &angles)
     return mat;
 }
 
+//---
+
 glm::mat4 rotVecToMat4(glm::vec3 const &angles)
 {
     auto T = glm::mat4(1.f);
     return rotateXYZ(T, angles);
 }
+
+//---
 
 auto rotFromTo(glm::vec3 const &A, glm::vec3 const &B)
 {
@@ -145,8 +129,117 @@ auto rotFromTo(glm::vec3 const &A, glm::vec3 const &B)
     auto const q  = glm::rotation(nA, nB);
     return glm::eulerAngles(q) * dc::toDegrees;
 };
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-//=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+//---
+
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+
+//=====================================
+// RENDER CPU SIDE - SCENE
+//=====================================
+
+// ::: SCENE RELATED
+
+//---
+
+enum SceneNodeType
+{
+    Node_tc   = 0,
+    Mesh_tc   = 1,
+    Light_tc  = 2,
+    Camera_tc = 3
+};
+
+//---
+
+// @idea : Meshes, Lights and Cameras to INHERIT from this.
+struct SceneNode
+{
+    std::string name      = "";
+    std::string uuid      = "";
+    uint32_t    level     = 0;
+    glm::mat4   transform = glm::mat4(1.f);
+
+    std::string              parentUUID = "";
+    std::vector<std::string> childsUUID = {};
+
+    virtual SceneNodeType getType() = 0; // Override this on : mesh, light and camera
+};
+
+//---
+
+class SceneTree
+{
+    /*
+      @DANI
+      If light, camera, mesh inherit from Node we can avoid many boilerplate and manage all by type.
+    */
+
+  public:
+    inline std::string addNode(/*SceneNode* node, ¿?*/ MBU std::string const &name, MBU glm::mat4 const &T, MBU std::string const &parentUUID)
+    {
+        // Node *p = (mHierarchy.count(parentUUID) > 0) ? &mHierarchy.at(parentUUID) : nullptr;
+
+        // auto const     uuid  = sole::uuid4().str();
+        // uint32_t const level = p ? p->level + 1 : 0;
+
+        // Node const node = {
+        //     .type       = type,
+        //     .name       = name,
+        //     .uuid       = uuid,
+        //     .level      = level,
+        //     .transform  = T,
+        //     .parentUUID = parentUUID,
+        // };
+
+        // if (p)
+        // {
+        //     p->childsUUID.push_back(uuid);
+        // }
+
+        // mHierarchy.insert_or_assign(uuid, node);
+        // return uuid;
+        return "";
+    }
+    inline void removeNode(/**/) {}
+    inline void getNodeByUUID(/**/) {}
+
+    inline void getMeshes(/**/) {}
+    inline void getLights(/**/) {}
+    inline void getCameras(/**/) {}
+
+  private:
+    std::unordered_map<std::string, SceneNode *> mHierarchy = {};
+};
+
+// //---
+
+// struct Scene
+// {
+//     // Hierarchy ...
+//     std::vector<Material> materials = {};
+//     std::vector<Camera>   cameras   = {};
+//     std::vector<Light>    lights    = {};
+//     std::vector<Mesh>     meshes    = {};
+// };
+
+//---
+
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+
+//=====================================
+// RENDER CPU SIDE - NODES
+//=====================================
+
+//---
 
 struct Mesh
 {
@@ -171,7 +264,7 @@ struct Mesh
     std::vector<Instance> instances = {};
 };
 
-//----
+//---
 
 struct Camera
 {
@@ -193,9 +286,9 @@ struct Camera
     // . And use pos*rot to Fly and rot*pos to Orbit
 };
 
-//----
+//---
 
-struct Light // To direct use on UBOs : Keep it aligned
+struct Light // To direct use on UBOs : Keep it aligned (only)
 {
     // On Shader: struct Light { vec4 pos; vec4 color; vec4 dir; float type; float I; float angle; float blend; };
 
@@ -206,14 +299,14 @@ struct Light // To direct use on UBOs : Keep it aligned
         Dir
     };
 
-    glm::vec4 pos      = {AxisY * 5.f, 1.f}; // .w==0 means disabled
-    glm::vec4 color    = Yellow;
-    glm::vec4 dir      = Zero4; // (Eurler Angles) Apply to (0,-1,0)
+    glm::vec4 pos   = {AxisY * 5.f, 1.f}; // .w==0 means disabled
+    glm::vec4 color = Yellow;
+    glm::vec4 dir   = Zero4; // (Eurler Angles) Apply to (0,-1,0)
 
-    float     type     = (float)Point;
-    float     intesity = 1.f;  // [ 0.0 : 100'000 ] on Watts
-    float     angle    = 0.2f; // [ 0.0 : PI ]
-    float     blend    = 0.2f; // [ 0.0 : 1.0 ]
+    float type     = (float)Point;
+    float intesity = 1.f;  // [ 0.0 : 100'000 ] on Watts
+    float angle    = 0.2f; // [ 0.0 : PI ]
+    float blend    = 0.2f; // [ 0.0 : 1.0 ]
 };
 
 glm::vec3 getLightFront(Light const &light)
@@ -221,14 +314,26 @@ glm::vec3 getLightFront(Light const &light)
     return glm::normalize(rotVecToMat4(light.dir)[2]);
 }
 
-//----
+//---
+
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+
+//=====================================
+// RENDER CPU SIDE - MATERIALS
+//=====================================
+
+//---
 
 struct Texture
 {
     //...
 };
 
-//----
+//---
 
 struct Material
 {
@@ -255,22 +360,51 @@ struct Material
     } texpath;
 };
 
-//----
+//---
 
-struct Scene
-{
-    // Hierarchy ...
-    std::vector<Material> materials = {};
-    std::vector<Camera>   cameras   = {};
-    std::vector<Light>    lights    = {};
-    std::vector<Mesh>     meshes    = {};
-};
-
-//----
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
 
 } // namespace dc
 
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
+//---------------------------------------------------------------------------------------------------------------------
+
+//=====================================
+// MAIN
+//=====================================
+
+//---
+
 #define TEST_N 1
+
+//---
 
 int main()
 {
@@ -297,3 +431,5 @@ int main()
 #else
 #endif
 }
+
+//---

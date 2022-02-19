@@ -37,9 +37,8 @@ set(VENDOR ${CMAKE_CURRENT_SOURCE_DIR}/vendor )
 # ---------------------------------------------- #
 
 option( OPT_UNIT_TESTS  "Compile unit tests instead of main app" OFF  ) # WIP : Let it OFF
-
-option( OPT_VULKAN   "Enable Vulkan and precompile shaders" ON  ) # WIP : Let it ON
-option( OPT_HEADLESS "The app will run without window/gui"  OFF ) # WIP : Let it OFF
+option( OPT_VULKAN      "Enable Vulkan and precompile shaders"   ON   ) # WIP : Let it ON
+option( OPT_HEADLESS    "The app will run without window/gui"    OFF  ) # WIP : Let it OFF
 
 ###############################################################################
 
@@ -61,16 +60,16 @@ if (OPT_VULKAN)
     file(GLOB shaders_list ${shaders_src_dir}/*)
     # . Create directory on build folder
     add_custom_command( COMMAND
-    ${CMAKE_COMMAND} -E remove_directory ${shaders_bin_dir}
-    ${CMAKE_COMMAND} -E make_directory ${shaders_bin_dir}
-    OUTPUT ${shaders_bin_dir}
+        ${CMAKE_COMMAND} -E remove_directory ${shaders_bin_dir}
+        ${CMAKE_COMMAND} -E make_directory ${shaders_bin_dir}
+        OUTPUT ${shaders_bin_dir}
     )
     # . Compile and place the output on previous step folder
     foreach(shader_src IN LISTS shaders_list)
-    get_filename_component(filename_and_ext ${shader_src} NAME)
-    set(shader_dst ${shaders_bin_dir}/${filename_and_ext}.spv)
-    add_custom_command(COMMAND ${glslc_executable} -o ${shader_dst} ${shader_src} OUTPUT ${shader_dst})
-    list(APPEND VK_SPV_SHADERS ${shaders_bin_dir}/${filename_and_ext}.spv)
+        get_filename_component(filename_and_ext ${shader_src} NAME)
+        set(shader_dst ${shaders_bin_dir}/${filename_and_ext}.spv)
+        add_custom_command(COMMAND ${glslc_executable} -o ${shader_dst} ${shader_src} OUTPUT ${shader_dst})
+        list(APPEND VK_SPV_SHADERS ${shaders_bin_dir}/${filename_and_ext}.spv)
     endforeach()
     # # add_custom_target(shaders ALL DEPENDS ${VK_SPV_SHADERS}) # Seems like unneeded
 

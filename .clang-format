@@ -11,14 +11,19 @@ AlignTrailingComments: 'true'
 AlignArrayOfStructures: Right
 AlignOperands: AlignAfterOperator
 AlignAfterOpenBracket: AlwaysBreak
-AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
-AlignConsecutiveMacros: AcrossEmptyLinesAndComments
-AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
-AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
+AlignConsecutiveBitFields: AcrossComments
+AlignConsecutiveMacros: AcrossComments
+AlignConsecutiveAssignments: AcrossComments
+AlignConsecutiveDeclarations: AcrossComments
 
 ...
 
 
+
+# AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
+# AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+# AlignConsecutiveAssignments: AcrossEmptyLinesAndComments
+# AlignConsecutiveDeclarations: AcrossEmptyLinesAndComments
 
 
 # ---
