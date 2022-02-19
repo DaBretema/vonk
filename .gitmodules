@@ -7,6 +7,3 @@
 [submodule "vendor/glm"]
 	path = vendor/glm
 	url = git@github.com:g-truc/glm.git
-[submodule "vendor/assimp"]
-	path = vendor/assimp
-	url = git@github.com:assimp/assimp.git
