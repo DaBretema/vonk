@@ -6,9 +6,25 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
+#include <entt.hpp> // ECS things
+
 #include <sole.hpp> // UUID thing
+
+//
+//-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+// ::: USEFUL LINKS
+//-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+/*
+
+ECS on C (or as_plain_as_possible):
+https://gamedev.stackexchange.com/questions/172584/how-could-i-implement-an-ecs-in-c
+
+*/
+//-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+//
 
 namespace dc
 { //
@@ -172,60 +188,42 @@ struct SceneNode
 
 //---
 
-class SceneTree
+struct Mesh;
+struct Light;
+struct Camera;
+
+struct Scene
 {
-    /*
-      @DANI
-      If light, camera, mesh inherit from Node we can avoid many boilerplate and manage all by type.
-    */
-
   public:
-    inline std::string addNode(/*SceneNode* node, ¿?*/ MBU std::string const &name, MBU glm::mat4 const &T, MBU std::string const &parentUUID)
+    inline void addNode(SceneNode *node, std::string const &name, glm::mat4 const &T, std::string const &parentUUID)
     {
-        // Node *p = (mHierarchy.count(parentUUID) > 0) ? &mHierarchy.at(parentUUID) : nullptr;
 
-        // auto const     uuid  = sole::uuid4().str();
-        // uint32_t const level = p ? p->level + 1 : 0;
+        node->name      = name;
+        node->transform = T;
+        node->uuid      = sole::uuid4().str();
 
-        // Node const node = {
-        //     .type       = type,
-        //     .name       = name,
-        //     .uuid       = uuid,
-        //     .level      = level,
-        //     .transform  = T,
-        //     .parentUUID = parentUUID,
-        // };
+        if (SceneNode *p = (mTree.count(parentUUID) > 0) ? mTree.at(parentUUID) : nullptr; p)
+        {
+            node->level      = p->level + 1;
+            node->parentUUID = parentUUID;
+        }
 
-        // if (p)
-        // {
-        //     p->childsUUID.push_back(uuid);
-        // }
-
-        // mHierarchy.insert_or_assign(uuid, node);
-        // return uuid;
-        return "";
+        mTree.insert_or_assign(node->uuid, node);
+        // return node->uuid;
     }
-    inline void removeNode(/**/) {}
-    inline void getNodeByUUID(/**/) {}
 
-    inline void getMeshes(/**/) {}
-    inline void getLights(/**/) {}
-    inline void getCameras(/**/) {}
+    inline SceneNode *getNode(std::string const &uuid)
+    {
+        return mTree.count(uuid) > 0 ? mTree.at(uuid) : nullptr;
+    }
+    inline SceneNode const *getNode(std::string const &uuid) const { return mTree.count(uuid) > 0 ? mTree.at(uuid) : nullptr; }
 
   private:
-    std::unordered_map<std::string, SceneNode *> mHierarchy = {};
+    std::unordered_map<std::string, SceneNode *> mTree    = {};
+    std::unordered_set<SceneNode *>              mMeshes  = {};
+    std::unordered_set<SceneNode *>              mLights  = {};
+    std::unordered_set<SceneNode *>              mCameras = {};
 };
-
-// //---
-
-// struct Scene
-// {
-//     // Hierarchy ...
-//     std::vector<Material> materials = {};
-//     std::vector<Camera>   cameras   = {};
-//     std::vector<Light>    lights    = {};
-//     std::vector<Mesh>     meshes    = {};
-// };
 
 //---
 
@@ -241,7 +239,7 @@ class SceneTree
 
 //---
 
-struct Mesh
+struct Mesh : public SceneNode
 {
     struct Vertex
     {
@@ -255,40 +253,21 @@ struct Mesh
 
     struct Instance
     {
-        glm::mat4 transform{1.f};
-        glm::vec4 color = Magenta;
+        glm::mat4 transform = glm::mat4(1.f);
+        glm::vec4 color     = Magenta;
     };
 
     std::vector<uint32_t> indices   = {};
     std::vector<Vertex>   vertices  = {};
     std::vector<Instance> instances = {};
+
+    virtual SceneNodeType getType() override { return Mesh_tc; }
 };
 
 //---
 
-struct Camera
-{
-    enum Mode : uint32_t
-    {
-        Orbital, // 1. rot 2. pos
-        Fly      // 1. pos 2. rot
-    };
-    enum Type : uint32_t
-    {
-        Perspective,
-        Orthogonal
-    };
-    glm::vec3 eye    = AxisZ * -10.f;      // Points  // or... glm::vec3 pos { AxisZ * -10.f }; (Point)
-    glm::vec3 lookat = Zero3;              // Points  // or... glm::vec3 rot { Zero3 }; (Euler Angles)
-    float     fov    = glm::radians(45.f); // [0.5 to 170] Degrees (From Blender)
-    Mode      mode   = Mode::Orbital;
-    Type      type   = Type::Perspective;
-    // . And use pos*rot to Fly and rot*pos to Orbit
-};
-
-//---
-
-struct Light // To direct use on UBOs : Keep it aligned (only)
+struct Light : public SceneNode
+// To direct use on UBOs : Keep it aligned (only)
 {
     // On Shader: struct Light { vec4 pos; vec4 color; vec4 dir; float type; float I; float angle; float blend; };
 
@@ -307,12 +286,38 @@ struct Light // To direct use on UBOs : Keep it aligned (only)
     float intesity = 1.f;  // [ 0.0 : 100'000 ] on Watts
     float angle    = 0.2f; // [ 0.0 : PI ]
     float blend    = 0.2f; // [ 0.0 : 1.0 ]
-};
 
+    virtual SceneNodeType getType() override { return Light_tc; }
+};
 glm::vec3 getLightFront(Light const &light)
 {
     return glm::normalize(rotVecToMat4(light.dir)[2]);
 }
+
+//---
+
+struct Camera : public SceneNode
+{
+    enum Mode : uint32_t
+    {
+        Orbital, // 1. rot 2. pos
+        Fly      // 1. pos 2. rot
+    };
+    enum Type : uint32_t
+    {
+        Perspective,
+        Orthogonal
+    };
+
+    glm::vec3 eye    = AxisZ * -10.f;      // Points  // or... glm::vec3 pos { AxisZ * -10.f }; (Point)
+    glm::vec3 lookat = Zero3;              // Points  // or... glm::vec3 rot { Zero3 }; (Euler Angles)
+    float     fov    = glm::radians(45.f); // [0.5 to 170] Degrees (From Blender)
+
+    Mode mode = Mode::Orbital;
+    Type type = Type::Perspective;
+
+    virtual SceneNodeType getType() override { return Camera_tc; }
+};
 
 //---
 
@@ -402,7 +407,7 @@ struct Material
 
 //---
 
-#define TEST_N 1
+#define TEST_N 2
 
 //---
 
@@ -428,7 +433,35 @@ int main()
     LogInfof("::: {}", dc::toStr(V1));
     LogInfof("::: {}", dc::toStr(V2));
     LogInfof("::: {}", dc::toStr(dc::rotFromTo(V1, V2)));
-#else
+#elif TEST_N == 2
+    entt::registry registry;
+
+    /*
+
+    How to follow the dev of this:
+
+    1. Move all the Vulkan stuff to a "Render" folder
+
+    2. Move general helpers like "Macros.h" and "Utils.h" to "Utils" folder
+
+    3. Move all the Scene logic to "Scene" folder. i.e. The CPU representation of Render-Data
+
+
+    Available Components
+    ---
+     |-> [Data] Mesh (: indices[M], vertices[N], uvs[N], normals[N], tangents[N], bitangents[N], colors[N])
+     |-> [Data] Light (: type{point,spot,sun}, color, intensity, angle, blend)
+     |-> [Data] Camera (: fov, perspective-type, rotation-mode | eye+lookat now are resposability of Transform-comp)
+     |-> [Data] Material (: textures, props, colors)
+     |-> [Data] Transform (: pos, scl, rot, matrix())
+     |-> [Render] (: type{mesh, quad, line, point}, source=data-mesh*, renderApiType:this is the opengl/vulkan stuff)
+     |-> [Physics] RigidBody/SoftBody (: )
+     |-> [Physics] Collider (: offset, size/radius, convex-mesh)
+     |-> [Physics] Material (: friction, density, restitution, restitution-threshold)
+
+
+    */
+
 #endif
 }
 
