@@ -11,7 +11,27 @@
 
 //-----------------------------------------------
 
-#define MBU [[maybe_unused]]
+#define MBU           [[maybe_unused]]
+
+//-----------------------------------------------
+
+// Logging w/o format
+#define LogInfo(msg)  fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define LogWarn(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define LogError(msg) fmt::print("⛔️ ({}:{}) → {}\n", __FILE__, __LINE__, msg)
+#define Abort(msg) \
+    LogError(msg); \
+    abort();
+
+//-----------------------------------------------
+
+// Logging w/ format
+#define LogInfof(msg, ...)  LogInfo(fmt::format(msg, __VA_ARGS__))
+#define LogWarnf(msg, ...)  LogWarn(fmt::format(msg, __VA_ARGS__))
+#define LogErrorf(msg, ...) LogError(fmt::format(msg, __VA_ARGS__))
+#define Abortf(msg, ...)         \
+    LogErrorf(msg, __VA_ARGS__); \
+    abort();
 
 //-----------------------------------------------
 
@@ -28,47 +48,27 @@
 #define GetData(v)                   v.data()
 #define GetDataAs(newType, v)        reinterpret_cast<newType>(GetData(v))
 
-struct DataInfo_t
-{
-  uint32_t    elemSize = 0u;
-  uint32_t    count    = 0;
-  void const *data     = nullptr;
-};
-DataInfo_t GetDataInfo(auto const &v) { return { GetSizeOfFirstU32(v), GetCountU32(v), GetDataAs(void const *, v) }; }
-// #define GetDataInfo(v) std::forward_as_tuple(GetSizeOfFirst(v), GetCountU32(v), GetData(v))
-
-//-----------------------------------------------
-
-// Logging w/o format
-#define LogInfo(msg)  fmt::print("ℹ️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define LogWarn(msg)  fmt::print("⚠️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define LogError(msg) fmt::print("⛔️  ({}:{}) → {}\n", __FILE__, __LINE__, msg)
-#define Abort(msg) \
-  LogError(msg);   \
-  abort();
-
-//-----------------------------------------------
-
-// Logging w/ format
-#define LogInfof(msg, ...)  LogInfo(fmt::format(msg, __VA_ARGS__))
-#define LogWarnf(msg, ...)  LogWarn(fmt::format(msg, __VA_ARGS__))
-#define LogErrorf(msg, ...) LogError(fmt::format(msg, __VA_ARGS__))
-#define Abortf(msg, ...)       \
-  LogErrorf(msg, __VA_ARGS__); \
-  abort();
-
 //-----------------------------------------------
 
 // Evaluate critical condition
 
 #define AbortIf(conditionCode) \
-  if (conditionCode) { Abort(#conditionCode); }
+    if (conditionCode)         \
+    {                          \
+        Abort(#conditionCode); \
+    }
 
-#define AbortIfMsg(conditionCode, msg) \
-  if (conditionCode) { Abortf("{} --> {}", #conditionCode, msg); }
+#define AbortIfMsg(conditionCode, msg)            \
+    if (conditionCode)                            \
+    {                                             \
+        Abortf("{} --> {}", #conditionCode, msg); \
+    }
 
-#define AbortIfMsgf(conditionCode, msg, ...) \
-  if (conditionCode) { Abortf("{} --> {}", #conditionCode, fmt::format(msg, __VA_ARGS__)); }
+#define AbortIfMsgf(conditionCode, msg, ...)                                \
+    if (conditionCode)                                                      \
+    {                                                                       \
+        Abortf("{} --> {}", #conditionCode, fmt::format(msg, __VA_ARGS__)); \
+    }
 
 //-----------------------------------------------
 
@@ -78,16 +78,16 @@ DataInfo_t GetDataInfo(auto const &v) { return { GetSizeOfFirstU32(v), GetCountU
 //-----------------------------------------------
 
 // Fmt ptr
-#define PtrStr(p) fmt::format("{}", fmt::ptr(p))
+#define PtrStr(p)    fmt::format("{}", fmt::ptr(p))
 
 //-----------------------------------------------
 
 #define AssertLogReturn(toRet, ...) \
-  {                                 \
-    LogErrorf(__VA_ARGS__);         \
-    Assert(0);                      \
-    return toRet;                   \
-  }
+    {                               \
+        LogErrorf(__VA_ARGS__);     \
+        Assert(0);                  \
+        return toRet;               \
+    }
 
 //-----------------------------------------------
 
@@ -98,15 +98,33 @@ DataInfo_t GetDataInfo(auto const &v) { return { GetSizeOfFirstU32(v), GetCountU
 //-----------------------------------------------
 
 // Validate api calls
-#define VkCheck(vulkanCode) \
-  if (VkResult res = vulkanCode; res != VK_SUCCESS) { Abortf("{} : {}", res, #vulkanCode); }
+#define VkCheck(vulkanCode)                           \
+    if (VkResult res = vulkanCode; res != VK_SUCCESS) \
+    {                                                 \
+        Abortf("{} : {}", res, #vulkanCode);          \
+    }
 
 // Get instance functions
 #define VkInstanceFn(instance, extName, ...)                                      \
-  if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) { \
-    fn(instance, __VA_ARGS__);                                                    \
-  } else {                                                                        \
-    LogErrorf("Function {} is not available", #extName);                          \
-  }
+    if (auto fn = ((PFN_##extName)vkGetInstanceProcAddr(instance, #extName)); fn) \
+    {                                                                             \
+        fn(instance, __VA_ARGS__);                                                \
+    }                                                                             \
+    else                                                                          \
+    {                                                                             \
+        LogErrorf("Function {} is not available", #extName);                      \
+    }
+
+//-----------------------------------------------
+
+// Vulkan things, move out of here...
+struct DataInfo_t
+{
+    uint32_t    elemSize = 0u;
+    uint32_t    count    = 0;
+    void const *data     = nullptr;
+};
+DataInfo_t GetDataInfo(auto const &v) { return {GetSizeOfFirstU32(v), GetCountU32(v), GetDataAs(void const *, v)}; }
+// #define GetDataInfo(v) std::forward_as_tuple(GetSizeOfFirst(v), GetCountU32(v), GetData(v))
 
 //-----------------------------------------------

@@ -227,7 +227,7 @@ inline Buffer_t createBufferStaging(Device_t const &device, DataInfo_t di, VkBuf
   memcpy(data, di.data, di.elemSize * di.count);
   vkUnmapMemory(device.handle, buffHost.memory);
 
-  // . Copy from Host to Dev and clean the Host one
+  // . Copy from Host to Dev and clean the Host one  @Check is this copy backwards?
   copyBuffer(device, buffHost, buffDev);
   destroyBuffer(device, buffHost);
 
