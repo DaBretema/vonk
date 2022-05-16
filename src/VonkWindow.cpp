@@ -2,6 +2,8 @@
 
 #include "Macros.h"
 
+#include <vector>
+
 namespace vonk::window
 {  //
 

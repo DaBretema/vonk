@@ -7,6 +7,7 @@
 #include <array>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace vonk
 {  //
@@ -278,8 +279,8 @@ struct DrawPipelineData_t
     .maxDepth = 1.0f,
   } };
   std::vector<VkRect2D>   scissors  = { {
-    .offset = { 0, 0 },
-    .extent = { UINT32_MAX, UINT32_MAX },
+       .offset = { 0, 0 },
+       .extent = { UINT32_MAX, UINT32_MAX },
   } };
   CommandBuffersData_t    commandBuffersData;
 };
